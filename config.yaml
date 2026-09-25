@@ -1,0 +1,161 @@
+# House Watch Uruguay -- configuracion no sensible.
+# Los secretos NUNCA van aca: van en GitHub Actions Secrets (ver README).
+#
+# TODO(usuario): ajustar a tus criterios reales. Los valores de abajo son el
+# ejemplo de la especificacion, no tus preferencias.
+
+# ---------------------------------------------------------------------------
+# Fuentes y busquedas.
+#
+# Arma la busqueda buena a mano en el portal (con sus propios filtros) y pega
+# la URL resultante aca. Asi aprovechamos los filtros nativos del portal.
+#
+# AVISO InfoCasas: su robots.txt prohibe las URLs de filtro combinado "*-y-*"
+# (ej. /venta/casas-y-apartamentos/...). Usa una busqueda por tipo. El loader
+# valida esto y falla con un mensaje claro.
+# ---------------------------------------------------------------------------
+sources:
+
+  infocasas:
+    enabled: true
+    searches:
+      - name: montevideo
+        url: https://www.infocasas.com.uy/venta/casas/montevideo
+      - name: canelones-costa
+        url: https://www.infocasas.com.uy/venta/casas/canelones
+
+  # Bloqueadas hoy: MercadoLibre sirve una pagina anti-bot (HTTP 200 con
+  # "suspicious-traffic-frontend") y Gallito esta detras de un Cloudflare
+  # managed challenge. Quedan declaradas y desactivadas.
+  mercadolibre:
+    enabled: false
+    searches:
+      - name: montevideo
+        url: https://listado.mercadolibre.com.uy/inmuebles/casas/venta/montevideo/
+
+  gallito:
+    enabled: false
+    searches:
+      - name: montevideo
+        url: https://www.gallito.com.uy/inmuebles/casas/venta
+
+# ---------------------------------------------------------------------------
+# Filtros duros. Si una propiedad no los pasa, no se alerta nunca.
+# ---------------------------------------------------------------------------
+filters:
+  currency: USD
+  max_price: 250000
+  min_price: 40000
+  min_bedrooms: 3
+  min_built_area_m2: 60
+
+  # Rechazo inmediato por texto en titulo o descripcion (seccion 16).
+  reject_keywords:
+    - nuda propiedad
+    - derechos posesorios
+    - derechos y acciones
+    - ocupada
+    - ocupado
+    - remate
+    - subasta
+    - a reciclar totalmente
+
+  # Departamentos aceptados. Vacio = todos.
+  allowed_departments:
+    - Montevideo
+    - Canelones
+
+# ---------------------------------------------------------------------------
+# Scoring de preferencias (seccion 16). Determinista, sin IA.
+# Editable sin tocar codigo.
+# ---------------------------------------------------------------------------
+scoring:
+  base: 50
+
+  # Rango de precio "ideal" (no el maximo aceptable).
+  ideal_price:
+    min: 120000
+    max: 210000
+    points: 20
+
+  preferred_neighborhoods:
+    points: 10
+    names:
+      - Solymar
+      - Lagomar
+      - Shangrila
+      - El Pinar
+      - Carrasco
+      - Punta Gorda
+      - Malvin
+
+  bedrooms:
+    ideal_min: 3
+    points: 10
+
+  land_area:
+    min_m2: 300
+    points: 5
+
+  # Puntos por caracteristica detectada (facilities del portal + texto).
+  features:
+    garage: 3
+    fondo: 3
+    parrillero: 3
+    padron_unico: 5
+    acepta_banco: 5
+
+# ---------------------------------------------------------------------------
+# Alertas (secciones 20, 21).
+# ---------------------------------------------------------------------------
+alerts:
+  minimum_alert_score: 70
+  price_drop_threshold_percent: 5
+
+  # Techo de mensajes por corrida. Lo que pasa el techo NO se descarta: queda
+  # reservado y se envia en las corridas siguientes, de a poco. Evita que un
+  # dia raro (o un portal que republica todo su catalogo) dispare 50 Telegrams
+  # de golpe.
+  max_alerts_per_run: 8
+
+# ---------------------------------------------------------------------------
+# Deteccion de oportunidad (secciones 17, 18).
+# ---------------------------------------------------------------------------
+opportunity:
+  enabled: true
+  min_comparables: 15
+  # Buckets para no comparar casas absurdamente distintas (seccion 18).
+  built_area_bucket_m2: 50
+  land_area_bucket_m2: 400
+  # Cuanto por debajo de la mediana para considerarlo oportunidad.
+  significant_discount_percent: 10
+
+# ---------------------------------------------------------------------------
+# Proteccion contra scraping excesivo (seccion 29).
+# ---------------------------------------------------------------------------
+scraping:
+  max_search_pages_per_source: 5
+  max_detail_requests_per_run: 20
+  request_timeout_seconds: 10
+  retries: 2
+  jitter_ms: [150, 450]
+
+# ---------------------------------------------------------------------------
+# Presupuesto de ejecucion (seccion 30). El workflow corta a los 2 minutos;
+# la app intenta terminar bastante antes.
+# ---------------------------------------------------------------------------
+runtime:
+  deadline_seconds: 100
+
+# ---------------------------------------------------------------------------
+# Salud de fuentes y ciclo de vida (secciones 24, 27, 28).
+# ---------------------------------------------------------------------------
+health:
+  degrade_after_consecutive_failures: 3
+  mark_inactive_after_missed_observations: 4
+
+retention:
+  scrape_runs_days: 90
+  listing_versions_days: 365
+
+weekly_summary: true
