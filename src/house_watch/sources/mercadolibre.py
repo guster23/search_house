@@ -258,7 +258,10 @@ class MercadoLibreSource(BaseSource):
                         follow_redirects=True,
                     )
                     if resp.status_code >= 400:
-                        err = f"HTTP {resp.status_code} en {url}"
+                        err = (
+                            f"HTTP {resp.status_code} en {url} — "
+                            f"{resp.text[:1000]}"
+                        )
                         log.warning("mercadolibre: %s", err)
                         result.error = err
                         break
