@@ -231,16 +231,10 @@ class MercadoLibreSource(BaseSource):
         request_timeout = float(cfg.scraping.get("request_timeout_seconds", 10))
 
         for search in searches:
-            # Extraer filtros de precio del config para pasarlos a la API.
-            filters = cfg.filters
-            extra: dict[str, str] = {}
-            min_price = filters.get("min_price")
-            max_price = filters.get("max_price")
-            if min_price or max_price:
-                lo = int(min_price or 0)
-                hi = int(max_price or 9_999_999)
-                extra["price"] = f"{lo}-{hi}"
-                extra["price_currency"] = "USD"
+            # No pasamos filtros de precio a la API: MercadoLibre devuelve 403
+            # con price+price_currency en tokens client_credentials.
+            # El filtrado de precio lo hace filters.py aguas abajo, igual que
+            # con InfoCasas.
 
             for page in range(max_pages):
                 if budget.exhausted:
@@ -248,7 +242,7 @@ class MercadoLibreSource(BaseSource):
                     break
 
                 offset = page * PAGE_SIZE
-                url = _search_url(offset, extra)
+                url = _search_url(offset, {})
 
                 try:
                     resp = httpx.get(
