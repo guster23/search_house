@@ -67,14 +67,56 @@ def good_listing(external_id: str, source="fake", **kwargs) -> Listing:
 
 
 @pytest.fixture
-def fake_cfg(cfg):
-    cfg.sources = {
-        "fake": SourceConfig(
-            name="fake", enabled=True,
-            searches=(SearchConfig(name="s", url="https://example.invalid/s"),),
-        )
-    }
-    return cfg
+def fake_cfg():
+    """Config autónoma para los tests de pipeline.
+
+    Usa valores fijos que no dependen de config.yaml: cambiar las
+    preferencias de búsqueda no debe romper estos tests.
+    """
+    from house_watch.config import Config, Secrets
+
+    return Config(
+        sources={
+            "fake": SourceConfig(
+                name="fake", enabled=True,
+                searches=(SearchConfig(name="s", url="https://example.invalid/s"),),
+            )
+        },
+        filters={
+            "currency": "USD",
+            "max_price": 300000,
+            "min_price": 10000,
+            "min_bedrooms": 2,
+            "min_built_area_m2": 50,
+            "reject_keywords": ["nuda propiedad", "remate"],
+            "allowed_departments": ["Montevideo", "Canelones"],
+        },
+        scoring={
+            "base": 50,
+            "ideal_price": {"min": 100000, "max": 250000, "points": 20},
+            "preferred_neighborhoods": {"points": 10, "names": ["Solymar"]},
+            "bedrooms": {"ideal_min": 3, "points": 10},
+            "land_area": {"min_m2": 300, "points": 5},
+            "features": {"garage": 3, "fondo": 3, "parrillero": 3,
+                         "padron_unico": 5, "acepta_banco": 5},
+        },
+        alerts={
+            "minimum_alert_score": 60,
+            "price_drop_threshold_percent": 5,
+            "max_alerts_per_run": 8,
+        },
+        opportunity={"enabled": False, "min_comparables": 15,
+                     "built_area_bucket_m2": 50, "land_area_bucket_m2": 400,
+                     "significant_discount_percent": 10},
+        scraping={"max_search_pages_per_source": 5, "request_timeout_seconds": 10,
+                  "retries": 2, "jitter_ms": [0, 1]},
+        runtime={"deadline_seconds": 100},
+        health={"degrade_after_consecutive_failures": 3,
+                "mark_inactive_after_missed_observations": 4},
+        retention={"scrape_runs_days": 90, "listing_versions_days": 365},
+        weekly_summary=True,
+        secrets=Secrets(),
+    )
 
 
 def run_pipeline(cfg, repo, source, notifier) -> Pipeline:
