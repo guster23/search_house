@@ -45,12 +45,11 @@ sources:
 # ---------------------------------------------------------------------------
 filters:
   currency: USD
-  max_price: 250000
-  min_price: 40000
-  min_bedrooms: 3
+  max_price: 200000
+  min_bedrooms: 2
   min_built_area_m2: 60
 
-  # Rechazo inmediato por texto en titulo o descripcion (seccion 16).
+  # Rechazo inmediato por texto en titulo o descripcion.
   reject_keywords:
     - nuda propiedad
     - derechos posesorios
@@ -67,72 +66,81 @@ filters:
     - Canelones
 
 # ---------------------------------------------------------------------------
-# Scoring de preferencias (seccion 16). Determinista, sin IA.
-# Editable sin tocar codigo.
+# Scoring de preferencias. Determinista, sin IA. Editable sin tocar codigo.
+#
+# Con minimum_alert_score: 0 se alerta todo lo que pase los filtros duros.
+# Si empieza a llegar demasiado ruido, subi el umbral de a 10 puntos.
 # ---------------------------------------------------------------------------
 scoring:
   base: 50
 
   # Rango de precio "ideal" (no el maximo aceptable).
   ideal_price:
-    min: 120000
-    max: 210000
+    min: 80000
+    max: 180000
     points: 20
 
   preferred_neighborhoods:
-    points: 10
+    points: 15
     names:
+      # Montevideo
+      - Buceo
+      - Pocitos
+      - Punta Carretas
+      - Parque Rodó
+      - Parque Batlle
+      - Tres Cruces
+      - Palermo
+      - Cordon
+      - Prado
+      # Costa Canelones
       - Solymar
       - Lagomar
-      - Shangrila
       - El Pinar
-      - Carrasco
-      - Punta Gorda
-      - Malvin
+      - Neptunia
 
   bedrooms:
-    ideal_min: 3
-    points: 10
+    ideal_min: 2
+    points: 5
 
   land_area:
-    min_m2: 300
-    points: 5
+    min_m2: 200
+    points: 10
 
   # Puntos por caracteristica detectada (facilities del portal + texto).
   features:
-    garage: 3
-    fondo: 3
+    garage: 2
+    fondo: 8          # importante para vos
     parrillero: 3
-    padron_unico: 5
-    acepta_banco: 5
+    padron_unico: 8   # importante para vos
+    acepta_banco: 8   # importante para vos
+    piscina: 2
 
 # ---------------------------------------------------------------------------
-# Alertas (secciones 20, 21).
+# Alertas.
 # ---------------------------------------------------------------------------
 alerts:
-  minimum_alert_score: 70
+  # 0 = alerta todo lo que pase los filtros duros (sin score minimo).
+  # Si recibis demasiado ruido, cambialo a 60 o 70.
+  minimum_alert_score: 0
   price_drop_threshold_percent: 5
 
   # Techo de mensajes por corrida. Lo que pasa el techo NO se descarta: queda
-  # reservado y se envia en las corridas siguientes, de a poco. Evita que un
-  # dia raro (o un portal que republica todo su catalogo) dispare 50 Telegrams
-  # de golpe.
+  # reservado y se envia en las corridas siguientes, de a poco.
   max_alerts_per_run: 8
 
 # ---------------------------------------------------------------------------
-# Deteccion de oportunidad (secciones 17, 18).
+# Deteccion de oportunidad.
 # ---------------------------------------------------------------------------
 opportunity:
   enabled: true
   min_comparables: 15
-  # Buckets para no comparar casas absurdamente distintas (seccion 18).
   built_area_bucket_m2: 50
   land_area_bucket_m2: 400
-  # Cuanto por debajo de la mediana para considerarlo oportunidad.
   significant_discount_percent: 10
 
 # ---------------------------------------------------------------------------
-# Proteccion contra scraping excesivo (seccion 29).
+# Proteccion contra scraping excesivo.
 # ---------------------------------------------------------------------------
 scraping:
   max_search_pages_per_source: 5
@@ -142,14 +150,13 @@ scraping:
   jitter_ms: [150, 450]
 
 # ---------------------------------------------------------------------------
-# Presupuesto de ejecucion (seccion 30). El workflow corta a los 2 minutos;
-# la app intenta terminar bastante antes.
+# Presupuesto de ejecucion. El workflow corta a los 2 minutos.
 # ---------------------------------------------------------------------------
 runtime:
   deadline_seconds: 100
 
 # ---------------------------------------------------------------------------
-# Salud de fuentes y ciclo de vida (secciones 24, 27, 28).
+# Salud de fuentes y ciclo de vida.
 # ---------------------------------------------------------------------------
 health:
   degrade_after_consecutive_failures: 3
