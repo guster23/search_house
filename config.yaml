@@ -56,9 +56,9 @@ filters:
     - derechos y acciones
     - ocupada
     - ocupado
-    - remate
-    - subasta
-    - a reciclar totalmente
+    - anticresis
+    - en pozo
+    - obra nueva en pozo
 
   # Departamentos aceptados. Vacio = todos.
   allowed_departments:
@@ -104,7 +104,7 @@ scoring:
     points: 5
 
   land_area:
-    min_m2: 200
+    min_m2: 150
     points: 10
 
   # Puntos por caracteristica detectada (facilities del portal + texto).
