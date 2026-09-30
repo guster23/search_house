@@ -36,9 +36,12 @@ def test_secrets_nunca_se_filtran_en_repr():
     assert "SUPERSECRETO" not in str(secrets)
 
 
-def test_solo_infocasas_habilitada_por_defecto(cfg):
-    # ML y Gallito estan bloqueadas por deteccion de bots.
-    assert [s.name for s in cfg.enabled_sources()] == ["infocasas"]
+def test_fuentes_habilitadas_por_defecto(cfg):
+    # InfoCasas + MercadoLibre (API oficial). Gallito sigue bloqueada.
+    names = [s.name for s in cfg.enabled_sources()]
+    assert "infocasas" in names
+    assert "mercadolibre" in names
+    assert "gallito" not in names
 
 
 def test_config_faltante_da_error_claro(tmp_path):

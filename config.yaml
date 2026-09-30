@@ -24,15 +24,16 @@ sources:
       - name: canelones-costa
         url: https://www.infocasas.com.uy/venta/casas/canelones
 
-  # Bloqueadas hoy: MercadoLibre sirve una pagina anti-bot (HTTP 200 con
-  # "suspicious-traffic-frontend") y Gallito esta detras de un Cloudflare
-  # managed challenge. Quedan declaradas y desactivadas.
+  # MercadoLibre usa la API oficial REST (OAuth client_credentials).
+  # Requiere ML_CLIENT_ID y ML_CLIENT_SECRET en GitHub Actions Secrets.
   mercadolibre:
-    enabled: false
+    enabled: true
     searches:
       - name: montevideo
         url: https://listado.mercadolibre.com.uy/inmuebles/casas/venta/montevideo/
 
+  # Gallito sigue bloqueado: Cloudflare managed challenge.
+  # Sin workaround limpio disponible por ahora.
   gallito:
     enabled: false
     searches:
