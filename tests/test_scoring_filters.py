@@ -71,5 +71,7 @@ def test_filtro_duro_exige_precio(cfg):
 
 
 def test_filtro_por_departamento(cfg):
-    assert not passes_early_filters(make(department="Maldonado"), cfg)
-    assert passes_early_filters(make(department="Canelones"), cfg)
+    # Usamos el min_price del config para garantizar que el precio siempre pase.
+    precio_valido = int(cfg.filters.get("min_price", 50000)) + 1000
+    assert not passes_early_filters(make(department="Maldonado", price_usd=precio_valido), cfg)
+    assert passes_early_filters(make(department="Canelones", price_usd=precio_valido), cfg)
