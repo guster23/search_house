@@ -24,8 +24,10 @@ sources:
       - name: canelones-costa
         url: https://www.infocasas.com.uy/venta/casas/canelones
 
-  # MercadoLibre usa la API oficial REST (OAuth client_credentials).
-  # Requiere ML_CLIENT_ID y ML_CLIENT_SECRET en GitHub Actions Secrets.
+  # MercadoLibre usa la API oficial REST con token de USUARIO (el App Token
+  # de client_credentials recibe 403 en /sites/search). Requiere ML_CLIENT_ID
+  # y ML_CLIENT_SECRET en GitHub Actions Secrets, y una autorización única
+  # con `house-watch ml-auth` (los refresh tokens rotan y viven en la base).
   mercadolibre:
     enabled: true
     searches:

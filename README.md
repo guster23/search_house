@@ -21,16 +21,19 @@ Verificado con requests reales el **2026-09-25**:
 | Fuente | Estado | Detalle |
 |---|---|---|
 | **InfoCasas** | ✅ activa | Página server-rendered con `__NEXT_DATA__`. Sin navegador, sin API key. |
-| **MercadoLibre** | 🚫 bloqueada | Devuelve **HTTP 200** con su página anti-bot (`suspicious-traffic-frontend`). La API pública da 403 sin OAuth. |
+| **MercadoLibre** | ✅ activa (API oficial) | Token de **usuario** OAuth (Authorization Code + Refresh Token). Ver [Autorizar MercadoLibre](#7b-autorizar-mercadolibre-una-vez). |
 | **Gallito** | 🚫 bloqueada | Cloudflare managed challenge (`cf-mitigated: challenge`). |
 
-Las dos bloqueadas quedan declaradas en `config.yaml` con `enabled: false` y
-documentadas en su módulo. No se intenta evadir bloqueos ni resolver CAPTCHAs.
+Gallito queda declarada en `config.yaml` con `enabled: false` y documentada en
+su módulo. No se intenta evadir bloqueos ni resolver CAPTCHAs.
 
-> **Por qué importa el caso de MercadoLibre:** devuelve `200`, no un error. Un
-> scraper que confíe en el status code reportaría "0 propiedades" para siempre
-> sin avisar nada. Por eso la detección de scrapers rotos mira el **contenido**
-> de la respuesta, nunca el código HTTP.
+> **Por qué importan los casos de MercadoLibre:** el scraping HTML devolvía
+> `200`, no un error: su página anti-bot. Y la API con App Token
+> (`client_credentials`) devolvía `403` en `/sites/{site}/search`: el endpoint
+> está restringido a tokens de usuario para apps nuevas. Dos lecciones: la
+> detección de scrapers rotos mira el **contenido** de la respuesta, nunca el
+> código HTTP; y los mensajes de error incluyen el **body** de la respuesta,
+> porque un `403` pelado no se puede diagnosticar.
 
 InfoCasas alcanza de sobra para arrancar: una sola búsqueda devuelve ~3.900
 casas en Montevideo, y el JSON de la página de resultados ya trae descripción
@@ -107,6 +110,8 @@ TURSO_DATABASE_URL
 TURSO_AUTH_TOKEN
 TELEGRAM_BOT_TOKEN
 TELEGRAM_CHAT_ID
+ML_CLIENT_ID
+ML_CLIENT_SECRET
 ```
 
 O por CLI:
@@ -116,7 +121,42 @@ gh secret set TURSO_DATABASE_URL
 gh secret set TURSO_AUTH_TOKEN
 gh secret set TELEGRAM_BOT_TOKEN
 gh secret set TELEGRAM_CHAT_ID
+gh secret set ML_CLIENT_ID
+gh secret set ML_CLIENT_SECRET
 ```
+
+### 7b. Autorizar MercadoLibre (una vez)
+
+La búsqueda de MercadoLibre exige **token de usuario** (con App Token el
+endpoint responde 403). El token se autoriza una vez y los refresh tokens se
+renuevan solos en cada corrida.
+
+1. En el [DevCenter](https://developers.mercadolibre.com) de tu app:
+   habilitá el grant **"Authorization Code"** y registrá una **Redirect URI**.
+
+   El validador del DevCenter suele rechazar `localhost`. No importa: la URL
+   de redirección **no necesita existir ni cargar** — el `code` de autorización
+   viene en la barra de direcciones del navegador y solo hay que copiarla.
+   Registrá una URL HTTPS válida cualquiera (por ejemplo la home de tu
+   inmobiliaria, de tu bot, o `https://example.com/`) y pasásela al comando
+   con `--redirect-uri`. Tiene que coincidir **exactamente** con la registrada.
+2. Con los valores de la base y la app en el entorno:
+
+   ```bash
+   export TURSO_DATABASE_URL=... TURSO_AUTH_TOKEN=...
+   export ML_CLIENT_ID=... ML_CLIENT_SECRET=...
+   house-watch ml-auth --redirect-uri 'https://TU-URL-REGISTRADA/'
+   ```
+
+   Se abre el navegador, autorizás, y el navegador intenta ir a la URL de
+   redirección. **Si esa página da error o no carga: está bien, es lo
+   esperado.** Copiá la URL completa de la barra de direcciones (incluye
+   `?code=...`), pegala en la terminal y el `refresh_token` queda guardado
+   **en la base** (tabla `app_state`).
+
+No hace falta repetir esto nunca, salvo que el refresh token expire (6
+meses sin correr la app), cambies tu contraseña de MercadoLibre o revoques
+la autorización desde tu cuenta.
 
 ### 8. Configurar `config.yaml`
 
@@ -239,6 +279,7 @@ src/house_watch/
 ├── cli.py              punto de entrada (sin scheduler interno)
 ├── pipeline.py         orquestación de un run
 ├── config.py           config.yaml + secretos del entorno
+├── ml_auth.py          OAuth MercadoLibre: AC+RT, rotación y persistencia
 ├── models.py           Listing, SourceResult, RunStats
 ├── budget.py           deadline de ejecución
 ├── http.py             cliente httpx con reintentos y jitter

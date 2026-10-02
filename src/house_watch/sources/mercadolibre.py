@@ -1,16 +1,22 @@
 """MercadoLibre Uruguay -- integración via API oficial REST.
 
-Estrategia: OAuth client_credentials (sin usuario) + endpoint de búsqueda
-público. El scraping HTML devolvía HTTP 200 con página anti-bot; la API con
-un App Token funciona sin navegador.
+Estrategia: OAuth Authorization Code + Refresh Token (token de USUARIO) +
+endpoint de búsqueda. El scraping HTML devolvía HTTP 200 con página anti-bot,
+y el App Token de `client_credentials` recibe HTTP 403 en
+`/sites/{site}/search` (restringido para apps nuevas): el endpoint exige
+token de usuario.
 
 Flujo por run:
-  1. POST /oauth/token  →  access_token (válido 6 h; el run dura <2 min)
+  1. TokenManager resuelve el access_token: usa el persistido si no expiró,
+     o canjea el refresh_token (rotándolo; ver ml_auth.py).
   2. GET /sites/MLU/search?category=MLU1459&...  (paginado con offset)
 
-Si las credenciales ML_CLIENT_ID / ML_CLIENT_SECRET no están en el entorno,
-la fuente se comporta como BlockedSource con un mensaje descriptivo; nunca
-interrumpe el pipeline.
+La autorización inicial se hace una vez con `house-watch ml-auth`. Los
+tokens viven en la base (tabla app_state) porque los GitHub Secrets no se
+pueden escribir desde el runner y el refresh_token rota en cada canje.
+
+Si las credenciales o los tokens no están, la fuente reporta error
+descriptivo sin interrumpir el pipeline.
 
 Categorías MLU (Uruguay) relevantes:
   MLU1459  Casas
@@ -28,6 +34,7 @@ import httpx
 from ..budget import ExecutionBudget
 from ..config import Config, SearchConfig
 from ..http import HttpFetcher
+from ..ml_auth import MlAuthError, TokenManager, TokenStore
 from ..models import Listing, SourceResult
 from ..normalize import detect_features, positive, title_case_place, to_float, to_int
 from .base import BaseSource
@@ -35,7 +42,6 @@ from .base import BaseSource
 log = logging.getLogger(__name__)
 
 API_BASE = "https://api.mercadolibre.com"
-TOKEN_URL = f"{API_BASE}/oauth/token"
 SEARCH_URL = f"{API_BASE}/sites/MLU/search"
 
 # Categoría "Casas" en MLU (Uruguay).
@@ -45,35 +51,9 @@ CATEGORY_CASAS = "MLU1459"
 PAGE_SIZE = 50
 
 
-class MercadoLibreAuthError(Exception):
-    """No se pudo obtener el App Token."""
-
-
-def _get_token(client_id: str, client_secret: str, timeout: float = 10.0) -> str:
-    """Obtiene un App Token via client_credentials.
-
-    No usa HttpFetcher porque este request no es scraping de portal: es
-    autenticación contra nuestra propia aplicación. Timeout corto y sin
-    reintentos complejos: si falla, la fuente reporta error y el pipeline sigue.
-    """
-    resp = httpx.post(
-        TOKEN_URL,
-        data={
-            "grant_type": "client_credentials",
-            "client_id": client_id,
-            "client_secret": client_secret,
-        },
-        timeout=timeout,
-    )
-    if resp.status_code != 200:
-        raise MercadoLibreAuthError(
-            f"token fallido: HTTP {resp.status_code} — {resp.text[:200]}"
-        )
-    data = resp.json()
-    token = data.get("access_token")
-    if not token:
-        raise MercadoLibreAuthError(f"respuesta sin access_token: {data}")
-    return str(token)
+# MercadoLibreAuthError era la excepción del flujo client_credentials; ahora
+# es un alias para no romper a quien la importaba.
+MercadoLibreAuthError = MlAuthError
 
 
 def _search_url(offset: int, extra_params: dict[str, str]) -> str:
@@ -185,12 +165,35 @@ def parse_results(data: dict) -> tuple[list[Listing], int]:
 class MercadoLibreSource(BaseSource):
     """Fuente MercadoLibre Uruguay usando la API oficial REST.
 
-    Si las credenciales no están presentes en el entorno, actúa como
+    Si las credenciales o los tokens no están disponibles, actúa como
     BlockedSource: registra el error sin interrumpir el pipeline.
     """
 
     name = "mercadolibre"
     requires_browser = False
+
+    def set_store(self, store: TokenStore) -> None:
+        """Inyecta la persistencia de tokens (repo con app_state).
+
+        El pipeline no pasa el repo por search() (interfaz ListingSource), así
+        que el store se inyecta aparte; si nadie lo inyecta, la fuente no
+        puede resolver token y reporta el error de autorización.
+        """
+        self._store = store
+
+    def _resolve_token(self, cfg: Config) -> str:
+        """Access_token de usuario vigente, refrescando si hace falta."""
+        store: TokenStore | None = getattr(self, "_store", None)
+        if store is None:
+            raise MlAuthError(
+                "sin persistencia de tokens; corré `house-watch ml-auth` y "
+                "verificá que el run use la misma base (--db o Turso)"
+            )
+        return TokenManager(
+            store,
+            cfg.secrets.ml_client_id or "",
+            cfg.secrets.ml_client_secret or "",
+        ).get_access_token()
 
     def search(
         self,
@@ -208,16 +211,14 @@ class MercadoLibreSource(BaseSource):
             log.warning("mercadolibre: %s", msg)
             return SourceResult(source=self.name, listings=[], plausible=False, error=msg)
 
-        # Obtener token una sola vez para todo el run.
+        # Obtener token de usuario una sola vez para todo el run.
         try:
-            token = _get_token(
-                secrets.ml_client_id,  # type: ignore[arg-type]
-                secrets.ml_client_secret,  # type: ignore[arg-type]
-                timeout=float(cfg.scraping.get("request_timeout_seconds", 10)),
-            )
-        except MercadoLibreAuthError as exc:
+            token = self._resolve_token(cfg)
+        except MlAuthError as exc:
             log.error("mercadolibre: %s", exc)
             return SourceResult(source=self.name, listings=[], plausible=False, error=str(exc))
+        # fetch_detail (llamado después por el pipeline) reutiliza el token.
+        self._access_token = token
 
         max_pages = int(cfg.scraping.get("max_search_pages_per_source", 5))
         result = SourceResult(source=self.name)
@@ -252,6 +253,9 @@ class MercadoLibreSource(BaseSource):
                         follow_redirects=True,
                     )
                     if resp.status_code >= 400:
+                        # El body explica el porqué ("forbidden", scope
+                        # faltante, etc.): sin él un 403 es indistinguible
+                        # de otro error y se pierde el diagnóstico.
                         err = (
                             f"HTTP {resp.status_code} en {url} — "
                             f"{resp.text[:1000]}"
@@ -302,8 +306,13 @@ class MercadoLibreSource(BaseSource):
         if budget.exhausted:
             return listing
         url = f"{API_BASE}/items/{listing.external_id}"
+        headers = {
+            k: v for k, v in (
+                ("Authorization", f"Bearer {self._access_token}"),
+            ) if getattr(self, "_access_token", None)
+        }
         try:
-            resp = httpx.get(url, timeout=10.0, follow_redirects=True)
+            resp = httpx.get(url, headers=headers, timeout=10.0, follow_redirects=True)
             if resp.status_code != 200:
                 return listing
             data = resp.json()

@@ -1,4 +1,4 @@
-"""Tests para el source de MercadoLibre via API oficial.
+"""Tests para el source de MercadoLibre via API oficial (token de usuario).
 
 Se testea contra un JSON fixture que imita la respuesta real de la API
 (no se hacen requests reales en CI).
@@ -15,7 +15,6 @@ import pytest
 from house_watch.models import Listing
 from house_watch.sources.mercadolibre import (
     MercadoLibreSource,
-    _get_token,
     _search_url,
     parse_listing,
     parse_results,
@@ -212,6 +211,19 @@ def _make_cfg(client_id="test_id", client_secret="test_secret"):
     )
 
 
+class FakeTokenStore:
+    """TokenStore en memoria (misma interfaz que SqlListingRepository)."""
+
+    def __init__(self):
+        self.data: dict[str, str] = {}
+
+    def get_state(self, key: str) -> str | None:
+        return self.data.get(key)
+
+    def set_state(self, key: str, value: str) -> None:
+        self.data[key] = value
+
+
 def test_search_sin_credenciales_devuelve_error():
     from house_watch.config import Config, Secrets, SourceConfig, SearchConfig
     from house_watch.budget import ExecutionBudget
@@ -234,10 +246,11 @@ def test_search_con_credenciales_llama_api(monkeypatch):
 
     import httpx
 
-    # Mock del token.
+    # Token de usuario ya resuelto: la fuente no llama a /oauth/token.
     monkeypatch.setattr(
-        "house_watch.sources.mercadolibre._get_token",
-        lambda *args, **kwargs: "fake_token",
+        MercadoLibreSource,
+        "_resolve_token",
+        lambda self, cfg: "fake_user_token",
     )
 
     # Mock de httpx.get para la búsqueda.
@@ -249,6 +262,7 @@ def test_search_con_credenciales_llama_api(monkeypatch):
 
     cfg = _make_cfg()
     source = MercadoLibreSource()
+    source.set_store(FakeTokenStore())
     result = source.search(
         searches=(SearchConfig(name="montevideo", url="https://example.com"),),
         fetcher=MagicMock(),
@@ -268,9 +282,10 @@ def test_search_auth_fallida_devuelve_error(monkeypatch):
     from house_watch.config import SearchConfig
 
     monkeypatch.setattr(
-        "house_watch.sources.mercadolibre._get_token",
-        lambda *args, **kwargs: (_ for _ in ()).throw(
-            MercadoLibreAuthError("token fallido: HTTP 401")
+        MercadoLibreSource,
+        "_resolve_token",
+        lambda self, cfg: (_ for _ in ()).throw(
+            MercadoLibreAuthError("no hay tokens de MercadoLibre guardados")
         ),
     )
 
@@ -283,7 +298,50 @@ def test_search_auth_fallida_devuelve_error(monkeypatch):
         cfg=cfg,
     )
     assert result.plausible is False
-    assert "token fallido" in result.error
+    assert "no hay tokens" in result.error
+
+
+def test_search_sin_store_pide_ml_auth():
+    """Sin store inyectado no hay forma de resolver token: error accionable."""
+    from house_watch.budget import ExecutionBudget
+    from house_watch.config import SearchConfig
+
+    cfg = _make_cfg()
+    source = MercadoLibreSource()
+    result = source.search(
+        searches=(SearchConfig(name="montevideo", url="https://example.com"),),
+        fetcher=MagicMock(),
+        budget=ExecutionBudget(100),
+        cfg=cfg,
+    )
+    assert result.plausible is False
+    assert "ml-auth" in result.error
+
+
+def test_search_http_403_incluye_body_del_error(monkeypatch):
+    """El mensaje de error incluye el body: un 403 pelado no diagnosticable."""
+    from house_watch.budget import ExecutionBudget
+    from house_watch.config import SearchConfig
+
+    monkeypatch.setattr(
+        MercadoLibreSource, "_resolve_token", lambda self, cfg: "fake_user_token"
+    )
+    mock_response = MagicMock()
+    mock_response.status_code = 403
+    mock_response.text = '{"message":"forbidden","error":"forbidden","status":403}'
+    monkeypatch.setattr("httpx.get", lambda *args, **kwargs: mock_response)
+
+    cfg = _make_cfg()
+    source = MercadoLibreSource()
+    source.set_store(FakeTokenStore())
+    result = source.search(
+        searches=(SearchConfig(name="montevideo", url="https://example.com"),),
+        fetcher=MagicMock(),
+        budget=ExecutionBudget(100),
+        cfg=cfg,
+    )
+    assert result.plausible is False
+    assert "forbidden" in result.error
 
 
 def test_needs_detail_propiedad_nueva():
