@@ -56,7 +56,18 @@ jobs:
         env:
           ML_PROFILE_DIR: /tmp/ml-chrome-profile
           ML_EVIDENCE_DIR: /tmp/ml-evidencia
+          ML_STORAGE_STATE_FILE: /tmp/ml-storage-state.json
+          ML_STORAGE_STATE: ${{ secrets.ML_STORAGE_STATE }}
         run: |
+          # Cookies del perfil local exportadas a storage_state (Secret): si ML
+          # liga el trust al device en vez de a la IP, el trasplante abre el
+          # muro de login. Si el secret no existe, corre con perfil anonimo.
+          if [ -n "$ML_STORAGE_STATE" ]; then
+            printf '%s' "$ML_STORAGE_STATE" > /tmp/ml-storage-state.json
+            echo "storage_state presente ($(wc -c < /tmp/ml-storage-state.json) bytes)"
+          else
+            echo "sin secret ML_STORAGE_STATE: perfil anonimo del runner"
+          fi
           xvfb-run -a --server-args="-screen 0 1440x900x24" \
             python scripts/test_ml_ci.py
 

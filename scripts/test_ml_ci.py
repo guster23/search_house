@@ -15,6 +15,7 @@ Ademas deja evidencia en ML_EVIDENCE_DIR (default /tmp/ml-evidencia):
 """
 
 import asyncio
+import json
 import os
 import re
 import sys
@@ -70,6 +71,22 @@ async def esperar_ok(page) -> str:
     return last or "otro"
 
 
+async def sembrar_cookies(ctx) -> None:
+    """Siembra cookies del perfil local (storage_state exportado) si existen.
+
+    El trust de ML vive en cookies del device, no (solo) en la IP: si el
+    trasplante funciona, el runner carga el listado con cookies de la Mac.
+    """
+    path = os.environ.get("ML_STORAGE_STATE_FILE", "").strip()
+    if not path or not Path(path).exists():
+        print("sin storage_state: perfil anonimo del runner", flush=True)
+        return
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    cookies = data.get("cookies", [])
+    await ctx.add_cookies(cookies)
+    print(f"cookies sembradas: {len(cookies)} desde {path}", flush=True)
+
+
 async def main() -> int:
     print(f"perfil: {PROFILE} (existe={PROFILE.exists()}) channel={CHANNEL}", flush=True)
     async with async_playwright() as p:
@@ -82,6 +99,7 @@ async def main() -> int:
             args=["--disable-blink-features=AutomationControlled"],
         )
         page = ctx.pages[0] if ctx.pages else await ctx.new_page()
+        await sembrar_cookies(ctx)
 
         final = "otro"
         for intento in (1, 2, 3):
