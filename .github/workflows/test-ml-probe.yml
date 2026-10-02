@@ -1,12 +1,19 @@
 # Test de viabilidad: Chrome headed + perfil persistente contra ML dentro del
 # runner de GitHub Actions. Si esto pasa, house_watch puede scrapear ML 100%
 # en Actions a $0. Workflow de diagnostico: no escribe en la base ni manda
-# mensajes; el veredicto queda en el log del step "Probe ML".
+# mensajes; deja el veredicto en el log y lo publica (con evidencia) en la
+# rama orfana probe-veredicto, legible por cualquiera sin autenticacion.
 
 name: Test ML probe
 
 on:
   workflow_dispatch: {}
+  push:
+    branches:
+      - feat/mercadolibre-api
+    paths:
+      - ".github/workflows/test-ml-probe.yml"
+      - "scripts/test_ml_ci.py"
 
 # El probe no escribe nada, pero si dos corren a la vez se pisan el perfil
 # cacheado. Serializa sin cancelar la que ya arranco.
@@ -15,7 +22,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   probe:
@@ -48,6 +55,7 @@ jobs:
         id: probe
         env:
           ML_PROFILE_DIR: /tmp/ml-chrome-profile
+          ML_EVIDENCE_DIR: /tmp/ml-evidencia
         run: |
           xvfb-run -a --server-args="-screen 0 1440x900x24" \
             python scripts/test_ml_ci.py
@@ -58,3 +66,17 @@ jobs:
         if: always()
         run: |
           echo "Exit code del probe: ${{ steps.probe.outcome }} (0=ok viable, 1=muro/captcha, 2=error de ML, 3=timeout)"
+
+      # Publica veredicto + HTML + captura en la rama orfana probe-veredicto:
+      # se puede leer con raw.githubusercontent.com sin ningun token.
+      - name: Publicar evidencia
+        if: always()
+        run: |
+          cd /tmp/ml-evidencia
+          git init -q -b probe-veredicto .
+          git config user.name "ml-probe"
+          git config user.email "actions@github.com"
+          git add -A
+          git commit -qm "probe $(date -u +%Y-%m-%dT%H:%M:%SZ) exit=${{ steps.probe.outcome }}"
+          git push -q --force "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" probe-veredicto
+          echo "Evidencia en: https://github.com/${{ github.repository }}/blob/probe-veredicto/veredicto.txt"

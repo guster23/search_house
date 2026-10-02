@@ -7,18 +7,25 @@ stdout (busqueda de "VEREDICTO:") y el exit code dice el resultado:
   1 = muro/captcha
   2 = pagina de error de ML
   3 = timeout sin veredicto claro
+
+Ademas deja evidencia en ML_EVIDENCE_DIR (default /tmp/ml-evidencia):
+  - veredicto.txt: veredicto final + fecha
+  - pagina.html: HTML final de la pagina (para ver que sirvio ML)
+  - captura.png: screenshot de la pantalla bajo Xvfb
 """
 
 import asyncio
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from playwright.async_api import async_playwright
 
 URL = "https://listado.mercadolibre.com.uy/inmuebles/casas/venta/montevideo/"
 PROFILE = Path(os.environ.get("ML_PROFILE_DIR", "/tmp/ml-chrome-profile"))
+EVIDENCE = Path(os.environ.get("ML_EVIDENCE_DIR", "/tmp/ml-evidencia"))
 CHANNEL = os.environ.get("ML_CHROME_CHANNEL", "").strip() or None
 MAX_WAIT_S = 45  # por intento
 
@@ -32,6 +39,22 @@ async def state(page) -> str:
     if "Hubo un error" in html:
         return "error"
     return "otro"
+
+
+async def guardar_evidencia(page, veredicto: str) -> None:
+    """Guarda veredicto + HTML + screenshot para post-mortem fuera del runner."""
+    EVIDENCE.mkdir(parents=True, exist_ok=True)
+    html = await page.content()
+    (EVIDENCE / "pagina.html").write_text(html, encoding="utf-8")
+    (EVIDENCE / "veredicto.txt").write_text(
+        f"{veredicto}\nfecha: {datetime.now(timezone.utc).isoformat()}\n"
+        f"titulo: {await page.title()!r}\nurl: {page.url}\n",
+        encoding="utf-8",
+    )
+    try:
+        await page.screenshot(path=str(EVIDENCE / "captura.png"))
+    except Exception as exc:  # el screenshot no puede tapar el veredicto
+        print(f"screenshot fallo: {exc}", flush=True)
 
 
 async def esperar_ok(page) -> str:
@@ -70,7 +93,9 @@ async def main() -> int:
             print(f"intento {intento}: {final}; reintentando...", flush=True)
 
         if final != "ok":
-            print(f"\nVEREDICTO: {final.upper()}", flush=True)
+            veredicto = final.upper()
+            print(f"\nVEREDICTO: {veredicto}", flush=True)
+            await guardar_evidencia(page, veredicto)
             await ctx.close()
             return {"muro": 1, "error": 2}.get(final, 3)
 
@@ -85,11 +110,15 @@ async def main() -> int:
             s = await state(page)
             print(f"recarga {n}: {s}", flush=True)
             if s != "ok":
-                print(f"\nVEREDICTO: OK_PERO_RECARGA_{n}_{s.upper()}", flush=True)
+                veredicto = f"OK_PERO_RECARGA_{n}_{s.upper()}"
+                print(f"\nVEREDICTO: {veredicto}", flush=True)
+                await guardar_evidencia(page, veredicto)
                 await ctx.close()
                 return 3
 
-        print("\nVEREDICTO: OK_HEADLESS_RUNNER_VIABLE", flush=True)
+        veredicto = "OK_HEADLESS_RUNNER_VIABLE"
+        print(f"\nVEREDICTO: {veredicto}", flush=True)
+        await guardar_evidencia(page, veredicto)
         await ctx.close()
         return 0
 
