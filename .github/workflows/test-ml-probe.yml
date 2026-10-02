@@ -56,4 +56,5 @@ jobs:
       # el log del probe (linea VEREDICTO:).
       - name: Veredicto
         if: always()
-        run: echo "Exit code del probe: ${{ steps.probe.outcome }} (0=ok viable, 1=muro/captcha, 2=error de ML, 3=timeout)"
+        run: |
+          echo "Exit code del probe: ${{ steps.probe.outcome }} (0=ok viable, 1=muro/captcha, 2=error de ML, 3=timeout)"
