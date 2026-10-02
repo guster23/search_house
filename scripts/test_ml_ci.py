@@ -8,6 +8,9 @@ stdout (busqueda de "VEREDICTO:") y el exit code dice el resultado:
   2 = pagina de error de ML
   3 = timeout sin veredicto claro
 
+Si ML_STORAGE_STATE_FILE existe, siembra esas cookies antes de navegar
+(trasplante del perfil local: ver scripts/export_ml_cookies.py).
+
 Ademas deja evidencia en ML_EVIDENCE_DIR (default /tmp/ml-evidencia):
   - veredicto.txt: veredicto final + fecha
   - pagina.html: HTML final de la pagina (para ver que sirvio ML)
