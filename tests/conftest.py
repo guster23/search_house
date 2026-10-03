@@ -21,6 +21,12 @@ def infocasas_html() -> str:
     return (FIXTURES / "infocasas_search.html").read_text(encoding="utf-8", errors="replace")
 
 
+@pytest.fixture(scope="session")
+def gallito_html() -> str:
+    """Respuesta real de Gallito capturada el 2026-10-03."""
+    return (FIXTURES / "gallito_search.html").read_text(encoding="utf-8", errors="replace")
+
+
 @pytest.fixture
 def cfg():
     return load_config(ROOT / "config.yaml", secrets=Secrets())
