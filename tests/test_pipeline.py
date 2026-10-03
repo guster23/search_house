@@ -226,7 +226,7 @@ def test_el_techo_de_alertas_difiere_pero_no_descarta(fake_cfg, repo):
 
 
 def test_una_fuente_que_explota_no_frena_a_las_demas(cfg, repo):
-    """Seccion 23: MercadoLibre OK, InfoCasas ERROR, Gallito OK."""
+    """Seccion 23: una fuente que explota no frena a las demas."""
     sana = FakeSource("sana", [good_listing("1", source="sana")])
     rota = FakeSource("rota", [], raises=RuntimeError("parser roto"))
 

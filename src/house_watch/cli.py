@@ -12,7 +12,6 @@ import sys
 from dataclasses import replace
 
 from .config import ConfigError, Secrets, load_config
-from .ml_auth import MlAuthError, interactive_auth
 from .notify.base import NullNotifier
 from .notify.telegram import TelegramNotifier
 from .pipeline import Pipeline
@@ -20,13 +19,11 @@ from .repository.connection import connect
 from .repository.sql import SqlListingRepository
 from .sources.gallito import GallitoSource
 from .sources.infocasas import InfocasasSource
-from .sources.mercadolibre import MercadoLibreSource
 
 log = logging.getLogger("house_watch")
 
 SOURCES = {
     "infocasas": InfocasasSource(),
-    "mercadolibre": MercadoLibreSource(),
     "gallito": GallitoSource(),
 }
 
@@ -40,26 +37,8 @@ def build_parser() -> argparse.ArgumentParser:
         "command",
         nargs="?",
         default="run",
-        choices=["run", "ml-auth"],
-        help="'run' (default) o 'ml-auth' (autorizacion unica de MercadoLibre).",
-    )
-    parser.add_argument(
-        "--redirect-uri",
-        default="http://localhost/",
-        help=(
-            "redirect_uri registrada en el DevCenter de ML (para ml-auth). "
-            "Debe coincidir EXACTAMENTE. Si el DevCenter rechaza localhost, "
-            "registrá una URL https cualquiera válida y pasala acá."
-        ),
-    )
-    parser.add_argument(
-        "--no-pkce",
-        action="store_true",
-        help=(
-            "no usa PKCE en la autorización (para ml-auth). Probar si ML "
-            "muestra 'la aplicación no puede conectarse a tu cuenta' con el "
-            "grant habilitado y la redirect_uri exacta."
-        ),
+        choices=["run"],
+        help="accion a ejecutar (solo 'run'; puede omitirse).",
     )
     parser.add_argument("--config", default="config.yaml", help="ruta a config.yaml")
     parser.add_argument(
@@ -124,17 +103,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         repo.migrate()
 
-        if args.command == "ml-auth":
-            return _ml_auth(cfg, repo, args.redirect_uri, use_pkce=not args.no_pkce)
-
         if args.migrate_only:
             log.info("Migraciones aplicadas sobre %s. Nada mas que hacer.", backend)
             return 0
-
-        # La fuente de MercadoLibre persiste/rota sus tokens en app_state; el
-        # repo se lo inyecta aca porque la interfaz ListingSource no lo pasa.
-        if isinstance(SOURCES["mercadolibre"], MercadoLibreSource):
-            SOURCES["mercadolibre"].set_store(repo)
 
         if args.dry_run:
             notifier = NullNotifier()
@@ -152,31 +123,6 @@ def main(argv: list[str] | None = None) -> int:
         return Pipeline(cfg, repo, notifier, SOURCES).run()
     finally:
         repo.close()
-
-
-def _ml_auth(cfg, repo, redirect_uri: str, use_pkce: bool = True) -> int:
-    """Autorizacion unica de MercadoLibre: guarda refresh_token en la base."""
-    if not cfg.secrets.has_mercadolibre:
-        log.error(
-            "Faltan ML_CLIENT_ID / ML_CLIENT_SECRET en el entorno; exportalos "
-            "y volve a correr `house-watch ml-auth`."
-        )
-        return 2
-    try:
-        interactive_auth(
-            cfg.secrets.ml_client_id,  # type: ignore[arg-type]
-            cfg.secrets.ml_client_secret,  # type: ignore[arg-type]
-            redirect_uri,
-            store=repo,
-            use_pkce=use_pkce,
-        )
-        return 0
-    except MlAuthError as exc:
-        log.error("Autorizacion MercadoLibre fallida: %s", exc)
-        return 1
-    except KeyboardInterrupt:
-        print()
-        return 130
 
 
 if __name__ == "__main__":

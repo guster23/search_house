@@ -37,10 +37,9 @@ def test_secrets_nunca_se_filtran_en_repr():
 
 
 def test_fuentes_habilitadas_por_defecto(cfg):
-    # InfoCasas + MercadoLibre (API oficial). Gallito sigue bloqueada.
+    # InfoCasas activa; Gallito sigue bloqueada.
     names = [s.name for s in cfg.enabled_sources()]
     assert "infocasas" in names
-    assert "mercadolibre" in names
     assert "gallito" not in names
 
 

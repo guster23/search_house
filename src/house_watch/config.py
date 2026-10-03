@@ -43,8 +43,6 @@ class Secrets:
     telegram_chat_id: str | None = None
     turso_database_url: str | None = None
     turso_auth_token: str | None = None
-    ml_client_id: str | None = None
-    ml_client_secret: str | None = None
 
     @property
     def has_telegram(self) -> bool:
@@ -54,10 +52,6 @@ class Secrets:
     def has_turso(self) -> bool:
         return bool(self.turso_database_url and self.turso_auth_token)
 
-    @property
-    def has_mercadolibre(self) -> bool:
-        return bool(self.ml_client_id and self.ml_client_secret)
-
     @classmethod
     def from_env(cls) -> "Secrets":
         return cls(
@@ -65,16 +59,13 @@ class Secrets:
             telegram_chat_id=os.environ.get("TELEGRAM_CHAT_ID") or None,
             turso_database_url=os.environ.get("TURSO_DATABASE_URL") or None,
             turso_auth_token=os.environ.get("TURSO_AUTH_TOKEN") or None,
-            ml_client_id=os.environ.get("ML_CLIENT_ID") or None,
-            ml_client_secret=os.environ.get("ML_CLIENT_SECRET") or None,
         )
 
     def __repr__(self) -> str:  # pragma: no cover - proteccion anti-leak
         """Nunca exponer valores en logs ni en tracebacks (seccion 12)."""
         return (
             f"Secrets(telegram={'set' if self.has_telegram else 'unset'}, "
-            f"turso={'set' if self.has_turso else 'unset'}, "
-            f"mercadolibre={'set' if self.has_mercadolibre else 'unset'})"
+            f"turso={'set' if self.has_turso else 'unset'})"
         )
 
 
