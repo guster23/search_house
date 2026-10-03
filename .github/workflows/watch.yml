@@ -21,11 +21,9 @@ permissions:
 jobs:
   watch:
     runs-on: ubuntu-latest
-    # Techo duro de costo: 24 runs/dia x 31 dias x 2 min = 1488 min/mes, dentro
-    # de los 2000 gratis. En la practica cada run tarda ~20s, y como Actions
-    # factura por minuto entero redondeando hacia arriba, el gasto real ronda
-    # los 744 min/mes.
-    timeout-minutes: 2
+    # Techo duro de costo: 24 runs/dia x 31 dias x 4 min = 2976 min/mes, dentro
+    # de los 2000 gratis si el run real promedia ~1 min (InfoCasas ~20s + Gallito ~15s).
+    timeout-minutes: 4
 
     steps:
       - uses: actions/checkout@v4
@@ -36,14 +34,18 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      # Sin Playwright ni Chromium: ningun scraper activo necesita navegador.
+      # Playwright + Chromium necesarios para Gallito (Cloudflare managed challenge).
       - name: Instalar
-        run: pip install --disable-pip-version-check -e '.[turso]'
+        run: |
+          pip install --disable-pip-version-check -e '.[turso,browser]'
+          python -m playwright install --with-deps chromium
 
+      # xvfb-run provee un display virtual para Chrome headed, que es el modo
+      # que mejor pasa el challenge de Cloudflare.
       - name: Ejecutar House Watch
         env:
           TURSO_DATABASE_URL: ${{ secrets.TURSO_DATABASE_URL }}
           TURSO_AUTH_TOKEN: ${{ secrets.TURSO_AUTH_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: house-watch run --config config.yaml
+        run: xvfb-run -a house-watch run --config config.yaml
