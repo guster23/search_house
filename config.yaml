@@ -21,8 +21,10 @@ sources:
     searches:
       - name: montevideo
         url: https://www.infocasas.com.uy/venta/casas/montevideo
-      - name: canelones-costa
-        url: https://www.infocasas.com.uy/venta/casas/canelones
+      - name: canelones-ciudad-de-la-costa
+        url: https://www.infocasas.com.uy/venta/casas/canelones/ciudad-de-la-costa
+      - name: canelones-costa-de-oro
+        url: https://www.infocasas.com.uy/venta/casas/canelones/costa-de-oro
 
   # MercadoLibre: descartada tras diagnostico completo (2026-10-02). La API
   # responde 403 para apps personales nuevas y el web exige login a IPs de
@@ -61,6 +63,26 @@ filters:
     - Montevideo
     - Canelones
 
+  # Lista blanca exclusiva. Solo se alertan casas en estos barrios/zonas.
+  allowed_neighborhoods:
+    # Montevideo
+    - Buceo
+    - Pocitos
+    - Pocitos Nuevo
+    - Punta Carretas
+    - Parque Rodó
+    - Parque Batlle
+    - Tres Cruces
+    - Palermo
+    - Barrio Sur
+    - Cordon
+    - Prado
+    # Costa Canelones
+    - Solymar
+    - Lagomar
+    - El Pinar
+    - Neptunia
+
 # ---------------------------------------------------------------------------
 # Scoring de preferencias. Determinista, sin IA. Editable sin tocar codigo.
 #
@@ -82,11 +104,13 @@ scoring:
       # Montevideo
       - Buceo
       - Pocitos
+      - Pocitos Nuevo
       - Punta Carretas
       - Parque Rodó
       - Parque Batlle
       - Tres Cruces
       - Palermo
+      - Barrio Sur
       - Cordon
       - Prado
       # Costa Canelones

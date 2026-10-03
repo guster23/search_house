@@ -75,3 +75,26 @@ def test_filtro_por_departamento(cfg):
     precio_valido = int(cfg.filters.get("min_price", 50000)) + 1000
     assert not passes_early_filters(make(department="Maldonado", price_usd=precio_valido), cfg)
     assert passes_early_filters(make(department="Canelones", price_usd=precio_valido), cfg)
+
+
+def test_filtro_por_barrios_excluidos(cfg):
+    precio_valido = int(cfg.filters.get("min_price", 50000)) + 1000
+    cfg.filters["excluded_neighborhoods"] = ["Brazo Oriental", "La Teja", "Toledo", "Larrañaga"]
+
+    # Barrio excluido
+    assert not passes_early_filters(make(neighborhood="Brazo Oriental", price_usd=precio_valido), cfg)
+    assert not passes_early_filters(make(neighborhood="la teja", price_usd=precio_valido), cfg)
+    assert not passes_early_filters(make(neighborhood="Larranaga", price_usd=precio_valido), cfg)
+    # Por ciudad
+    assert not passes_early_filters(make(neighborhood="Centro", city="Toledo", price_usd=precio_valido), cfg)
+    # Barrio permitido
+    assert passes_early_filters(make(neighborhood="Pocitos", price_usd=precio_valido), cfg)
+
+
+def test_filtro_por_barrios_permitidos(cfg):
+    precio_valido = int(cfg.filters.get("min_price", 50000)) + 1000
+    cfg.filters["allowed_neighborhoods"] = ["Pocitos", "Buceo", "Prado"]
+
+    assert passes_early_filters(make(neighborhood="Pocitos", price_usd=precio_valido), cfg)
+    assert not passes_early_filters(make(neighborhood="Sayago", price_usd=precio_valido), cfg)
+

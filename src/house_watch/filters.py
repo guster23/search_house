@@ -77,6 +77,38 @@ def passes_early_filters(listing: Listing, cfg: Config) -> FilterVerdict:
         if normalize_text(listing.department) not in wanted:
             return _reject(f"departamento '{listing.department}' fuera de la lista")
 
+    excluded_neighborhoods = f.get("excluded_neighborhoods") or f.get("reject_neighborhoods") or []
+    if excluded_neighborhoods:
+        excluded_norm = [normalize_text(n) for n in excluded_neighborhoods if n]
+        listing_locs = [
+            (loc, normalize_text(loc))
+            for loc in (listing.neighborhood, listing.city)
+            if loc
+        ]
+        for raw_loc, norm_loc in listing_locs:
+            for exc in excluded_norm:
+                if exc and (exc == norm_loc or exc in norm_loc):
+                    return _reject(f"barrio/zona '{raw_loc}' en lista de exclusion")
+
+    allowed_neighborhoods = f.get("allowed_neighborhoods") or []
+    if allowed_neighborhoods and (listing.neighborhood or listing.city):
+        allowed_norm = [normalize_text(n) for n in allowed_neighborhoods if n]
+        listing_locs = [
+            normalize_text(loc)
+            for loc in (listing.neighborhood, listing.city)
+            if loc
+        ]
+        matched = False
+        for norm_loc in listing_locs:
+            for alw in allowed_norm:
+                if alw and (alw == norm_loc or alw in norm_loc or norm_loc in alw):
+                    matched = True
+                    break
+            if matched:
+                break
+        if not matched:
+            return _reject(f"barrio/zona '{listing.neighborhood or listing.city}' fuera de barrios permitidos")
+
     reason = hard_reject_reason(listing, cfg)
     if reason:
         return _reject(reason)
@@ -101,6 +133,10 @@ def passes_hard_filters(listing: Listing, cfg: Config) -> FilterVerdict:
             return _reject(
                 f"{listing.built_area_m2:.0f} m2 edificados < {float(min_built):.0f}"
             )
+
+    allowed_neighborhoods = f.get("allowed_neighborhoods") or []
+    if allowed_neighborhoods and not listing.neighborhood and not listing.city:
+        return _reject("sin barrio ni ciudad identificada")
 
     # Sin precio no se puede evaluar ni comparar: no alertamos a ciegas.
     if listing.price_usd is None:
