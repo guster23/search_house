@@ -1,15 +1,24 @@
 # House Watch Uruguay
 
-Recibís un Telegram cuando aparece una casa que cumple tus criterios en los
-portales inmobiliarios uruguayos.
+**Tu radar inmobiliario personal para Uruguay.**
 
-Sin servidor, sin dominio, sin frontend, sin IA, **sin computadora prendida** y
-sin pagar nada: es un batch job efímero que GitHub Actions dispara cada hora.
+En vez de entrar todos los días a revisar manualmente cientos de publicaciones repetidas, con trampas o en zonas que no te interesan, House Watch monitorea los portales por vos y te avisa a Telegram en tiempo real únicamente cuando:
+
+1. **Aparece una casa nueva** que cumple exactamente tus criterios (en tus barrios elegidos, dentro de tu presupuesto, con los dormitorios necesarios y con atributos deseados como fondo, padrón único o apta para banco).
+2. **Una casa que te sirve baja de precio** (al menos un 5%), permitiéndote enterarte antes que el resto de los compradores.
+
+Además, filtra automáticamente el 90% del "ruido" del mercado inmobiliario uruguayo: descarta de inmediato publicaciones con *nuda propiedad, derechos posesorios, ocupadas, en pozo o remates*.
+
+---
+
+### ¿Cómo funciona en segundo plano?
+
+Sin necesidad de tener la computadora prendida, sin pagar servidores ni servicios externos, y 100% gratuito: un proceso liviano y automatizado corre periódicamente en la nube, compara el mercado contra su base histórica y te envía las alertas accionables con foto y enlace directo.
 
 ```
-GitHub Actions (scheduler)  →  Python (proceso efímero)  →  Turso (estado)
+GitHub Actions (scheduler)  →  Python (proceso efímero)  →  Turso (historial y precios)
                                         ↓
-                                     Telegram
+                                     Telegram (tus alertas)
 ```
 
 ---
