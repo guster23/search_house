@@ -19,13 +19,11 @@ from .repository.connection import connect
 from .repository.sql import SqlListingRepository
 from .sources.gallito import GallitoSource
 from .sources.infocasas import InfocasasSource
-from .sources.mercadolibre import MercadoLibreSource
 
 log = logging.getLogger("house_watch")
 
 SOURCES = {
     "infocasas": InfocasasSource(),
-    "mercadolibre": MercadoLibreSource(),
     "gallito": GallitoSource(),
 }
 
@@ -104,6 +102,7 @@ def main(argv: list[str] | None = None) -> int:
     repo = SqlListingRepository(conn)
     try:
         repo.migrate()
+
         if args.migrate_only:
             log.info("Migraciones aplicadas sobre %s. Nada mas que hacer.", backend)
             return 0

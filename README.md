@@ -21,16 +21,19 @@ Verificado con requests reales el **2026-09-25**:
 | Fuente | Estado | Detalle |
 |---|---|---|
 | **InfoCasas** | ✅ activa | Página server-rendered con `__NEXT_DATA__`. Sin navegador, sin API key. |
-| **MercadoLibre** | 🚫 bloqueada | Devuelve **HTTP 200** con su página anti-bot (`suspicious-traffic-frontend`). La API pública da 403 sin OAuth. |
+| **MercadoLibre** | 🚫 descartada | API con 403 para apps personales + web exige login a IPs de datacenter. Ver [HANDOFF.md](HANDOFF.md). |
 | **Gallito** | 🚫 bloqueada | Cloudflare managed challenge (`cf-mitigated: challenge`). |
 
-Las dos bloqueadas quedan declaradas en `config.yaml` con `enabled: false` y
-documentadas en su módulo. No se intenta evadir bloqueos ni resolver CAPTCHAs.
+Gallito queda declarada en `config.yaml` con `enabled: false` y documentada en
+su módulo. No se intenta evadir bloqueos ni resolver CAPTCHAs.
 
-> **Por qué importa el caso de MercadoLibre:** devuelve `200`, no un error. Un
-> scraper que confíe en el status code reportaría "0 propiedades" para siempre
-> sin avisar nada. Por eso la detección de scrapers rotos mira el **contenido**
-> de la respuesta, nunca el código HTTP.
+> **Lecciones del caso MercadoLibre (descartado en 2026-10-02):** el scraping
+> HTML devolvía `200`, no un error: su página anti-bot. Y la API con App Token
+> (`client_credentials`) devolvía `403` en `/sites/{site}/search`: el endpoint
+> está restringido a tokens de usuario para apps nuevas. Dos lecciones que
+> quedan en el código: la detección de scrapers rotos mira el **contenido**
+> de la respuesta, nunca el código HTTP; y los mensajes de error incluyen el
+> **body** de la respuesta, porque un `403` pelado no se puede diagnosticar.
 
 InfoCasas alcanza de sobra para arrancar: una sola búsqueda devuelve ~3.900
 casas en Montevideo, y el JSON de la página de resultados ya trae descripción
@@ -243,7 +246,7 @@ src/house_watch/
 ├── budget.py           deadline de ejecución
 ├── http.py             cliente httpx con reintentos y jitter
 ├── browser.py          fallback de navegador (no instanciado)
-├── sources/            infocasas · mercadolibre · gallito
+├── sources/            infocasas · gallito
 ├── repository/         interfaz + una implementación SQL, dos conexiones
 ├── notify/             interfaz + Telegram + formato de mensajes
 ├── normalize.py        texto, números, ubicaciones, amenities
@@ -255,8 +258,7 @@ src/house_watch/
 ```
 
 Los tests corren contra la **respuesta real** de InfoCasas capturada en
-`tests/fixtures/`, incluida la página anti-bot de MercadoLibre como caso
-negativo.
+`tests/fixtures/`.
 
 ## Mantenimiento
 

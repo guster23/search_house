@@ -24,13 +24,9 @@ sources:
       - name: canelones-costa
         url: https://www.infocasas.com.uy/venta/casas/canelones
 
-  # MercadoLibre usa la API oficial REST (OAuth client_credentials).
-  # Requiere ML_CLIENT_ID y ML_CLIENT_SECRET en GitHub Actions Secrets.
-  mercadolibre:
-    enabled: true
-    searches:
-      - name: montevideo
-        url: https://listado.mercadolibre.com.uy/inmuebles/casas/venta/montevideo/
+  # MercadoLibre: descartada tras diagnostico completo (2026-10-02). La API
+  # responde 403 para apps personales nuevas y el web exige login a IPs de
+  # datacenter (GitHub Actions). Detalles en HANDOFF.md.
 
   # Gallito sigue bloqueado: Cloudflare managed challenge.
   # Sin workaround limpio disponible por ahora.

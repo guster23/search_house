@@ -1,9 +1,9 @@
 """Salud de fuentes y deteccion de scrapers rotos (seccion 24).
 
-La premisa: una fuente que devuelve 0 resultados no necesariamente funciono.
-MercadoLibre es el caso literal -- responde HTTP 200 con una pagina anti-bot.
-Por eso la senal de exito es `SourceResult.plausible`, que mira el contenido,
-y nunca el status code.
+La premisa: una fuente que devuelve 0 resultados no necesariamente funciono:
+puede estar sirviendo una pagina anti-bot con HTTP 200, indistinguible de un
+scraper roto si uno confiara en el status code. Por eso la senal de exito es
+`SourceResult.plausible`, que mira el contenido, y nunca el status code.
 
 Se avisa una sola vez al degradarse y una sola vez al recuperarse, para que el
 monitoreo no se convierta en ruido horario.

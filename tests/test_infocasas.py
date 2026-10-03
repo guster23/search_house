@@ -53,17 +53,6 @@ def test_nunca_necesita_abrir_detalle(infocasas_html):
     assert InfocasasSource().needs_detail(listing, None) is False
 
 
-def test_pagina_anti_bot_de_mercadolibre_no_pasa_por_resultados(mercadolibre_antibot_html):
-    """HTTP 200 no significa exito.
-
-    Esta es la respuesta real de MercadoLibre: status 200 con una pagina
-    anti-bot. Si el parser la aceptara en silencio, el sistema reportaria
-    "0 propiedades" para siempre sin avisar nada.
-    """
-    with pytest.raises(InfocasasParseError):
-        extract_search_payload(mercadolibre_antibot_html)
-
-
 def test_plausibilidad_mira_contenido_no_status():
     assert is_plausible_search([{"id": 1}], {}) is True
     assert is_plausible_search([], {"total": 3906}) is True

@@ -3,7 +3,7 @@
 Abstraccion deliberadamente vacia: hoy ningun scraper activo la necesita, asi
 que el workflow NO instala Playwright ni Chromium y el run es de segundos.
 
-Cuando haga falta (probablemente para MercadoLibre o Gallito), implementar aca
+Cuando haga falta (por ejemplo para Gallito, bloqueado por Cloudflare), implementar aca
 con: Chromium headless, bloqueo de imagenes/fuentes/media/analytics, timeout
 agresivo y cierre garantizado de context y browser.
 
