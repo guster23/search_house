@@ -17,8 +17,7 @@ from .budget import ExecutionBudget
 
 log = logging.getLogger(__name__)
 
-# UA de navegador real y honesto: no rotamos identidades ni evadimos bloqueos
-# (seccion 29). Si un portal nos bloquea, lo registramos y seguimos.
+# UA de navegador real. Si un portal nos bloquea, lo registramos y seguimos.
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
@@ -65,7 +64,7 @@ class HttpFetcher:
         self._client.close()
 
     def _sleep_jitter(self, host: str) -> None:
-        """Pausa corta entre requests al mismo dominio (seccion 29)."""
+        """Pausa corta entre requests al mismo dominio."""
         last = self._last_request_at.get(host)
         if last is not None:
             delay = random.uniform(*self._jitter_ms) / 1000.0

@@ -1,0 +1,48 @@
+name: Gallito Probe
+
+# Sonda de accesibilidad de Gallito desde el runner de GitHub Actions.
+# Responde una pregunta que nunca medimos: Gallito, que con httpx desde una
+# IP residencial da 403 (Cloudflare managed challenge), es accesible desde
+# una IP de datacenter? No evade nada; solo mide y publica evidencia.
+
+on:
+  # Disparo manual (solo aparece en la rama default; por eso tambien push).
+  workflow_dispatch:
+  push:
+    paths:
+      - "scripts/probe_gallito.py"
+      - ".github/workflows/test-gallito-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar dependencias
+        run: |
+          pip install --disable-pip-version-check httpx playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Probe Gallito (httpx + curl + Chrome headed bajo Xvfb)
+        run: |
+          xvfb-run -a python scripts/probe_gallito.py | tee probe_gallito.txt
+
+      - name: Publicar evidencia
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gallito-probe-report
+          path: probe_gallito.txt
+          retention-days: 14

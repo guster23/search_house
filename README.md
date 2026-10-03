@@ -25,7 +25,7 @@ Verificado con requests reales el **2026-09-25**:
 | **Gallito** | 🚫 bloqueada | Cloudflare managed challenge (`cf-mitigated: challenge`). |
 
 Gallito queda declarada en `config.yaml` con `enabled: false` y documentada en
-su módulo. No se intenta evadir bloqueos ni resolver CAPTCHAs.
+su módulo.
 
 > **Lecciones del caso MercadoLibre (descartado en 2026-10-02):** el scraping
 > HTML devolvía `200`, no un error: su página anti-bot. Y la API con App Token

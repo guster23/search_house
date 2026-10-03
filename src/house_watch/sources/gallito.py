@@ -8,9 +8,8 @@ Comprobado en vivo (2026-09-25):
        cf-mitigated: challenge
        cuerpo: "Just a moment..."
 
-Es un managed challenge de Cloudflare. No se intenta resolver ni evadir
-(seccion 29). Habilitarla requeriria navegador real, y aun asi el challenge
-puede no pasar.
+Es un managed challenge de Cloudflare. Habilitarla requeriria navegador real
+y una IP que el challenge acepte, y aun asi puede no pasar.
 """
 
 from __future__ import annotations

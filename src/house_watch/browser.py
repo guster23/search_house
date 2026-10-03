@@ -7,8 +7,7 @@ Cuando haga falta (por ejemplo para Gallito, bloqueado por Cloudflare), implemen
 con: Chromium headless, bloqueo de imagenes/fuentes/media/analytics, timeout
 agresivo y cierre garantizado de context y browser.
 
-No se intenta resolver CAPTCHAs. Ante un bloqueo se registra source_degraded y
-se sigue con las demas fuentes.
+Ante un bloqueo se registra source_degraded y se sigue con las demas fuentes.
 """
 
 from __future__ import annotations
