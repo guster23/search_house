@@ -18,9 +18,11 @@ residencial. Nunca se midio desde el runner ni con un navegador real.
 
 from __future__ import annotations
 
+import argparse
 import json
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 
 UA = (
@@ -103,8 +105,14 @@ def probe_curl() -> list[dict]:
     return out
 
 
-def probe_chrome() -> list[dict]:
-    out = []
+def probe_chrome(runs: int = 1, delay_s: float = 0.0) -> list[dict]:
+    """Corre el navegador real `runs` veces para medir estabilidad del challenge.
+
+    Cada corrida usa un contexto nuevo (cookies/clearance frescos) para ver si
+    el challenge se resuelve de forma consistente desde la misma IP, o si es
+    azaroso. Se agrega un campo `run` (1-indexado) a cada medicion.
+    """
+    out: list[dict] = []
     try:
         from playwright.sync_api import sync_playwright
     except Exception as exc:  # noqa: BLE001
@@ -119,45 +127,87 @@ def probe_chrome() -> list[dict]:
         except Exception as exc:  # noqa: BLE001
             return [{"error": f"no se pudo lanzar Chrome: {exc}", "verdict": "SKIP"}]
 
-        context = browser.new_context(user_agent=UA, locale="es-UY")
-        page = context.new_page()
-        for url in URLS:
-            try:
-                resp = page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                # Da tiempo a que el challenge de Cloudflare se resuelva solo.
-                page.wait_for_timeout(6000)
-                html = page.content()
-                status = resp.status if resp else None
-                title = page.title()
-                out.append(
-                    {
-                        "url": url,
-                        "status": status,
-                        "title": title,
-                        "len": len(html),
-                        "verdict": _classify(status, html, None, title),
-                    }
-                )
-            except Exception as exc:  # noqa: BLE001
-                out.append({"url": url, "status": None, "error": str(exc), "verdict": "ERROR"})
-        context.close()
+        for run in range(1, runs + 1):
+            if run > 1 and delay_s:
+                time.sleep(delay_s)
+            context = browser.new_context(user_agent=UA, locale="es-UY")
+            page = context.new_page()
+            for url in URLS:
+                try:
+                    resp = page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                    # Da tiempo a que el challenge de Cloudflare se resuelva solo.
+                    page.wait_for_timeout(6000)
+                    html = page.content()
+                    status = resp.status if resp else None
+                    title = page.title()
+                    out.append(
+                        {
+                            "run": run,
+                            "url": url,
+                            "status": status,
+                            "title": title,
+                            "len": len(html),
+                            "verdict": _classify(status, html, None, title),
+                        }
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    out.append(
+                        {"run": run, "url": url, "status": None, "error": str(exc), "verdict": "ERROR"}
+                    )
+            context.close()
         browser.close()
     return out
 
 
+def _stability(rows: list[dict]) -> dict:
+    """Cuenta veredictos por URL para ver si el resultado es consistente."""
+    per_url: dict[str, dict[str, int]] = {}
+    for r in rows:
+        url = r.get("url")
+        if not url:
+            continue
+        verdict = r.get("verdict", "ERROR")
+        per_url.setdefault(url, {})[verdict] = per_url.setdefault(url, {}).get(verdict, 0) + 1
+    return per_url
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Sonda de accesibilidad de Gallito")
+    parser.add_argument(
+        "--repeat",
+        type=int,
+        default=1,
+        help="Corridas del navegador real para medir estabilidad del challenge (default 1).",
+    )
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=10.0,
+        help="Segundos entre corridas del navegador (default 10).",
+    )
+    args = parser.parse_args()
+    runs = max(1, args.repeat)
+
+    chrome = probe_chrome(runs=runs, delay_s=args.delay)
     report = {
         "probe": "gallito",
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "runs": runs,
         "httpx": probe_httpx(),
         "curl": probe_curl(),
-        "chrome_headed": probe_chrome(),
+        "chrome_headed": chrome,
+        "stability": _stability(chrome),
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
-    verdicts = {r.get("verdict") for r in report["httpx"] + report["curl"] + report["chrome_headed"]}
+    verdicts = {r.get("verdict") for r in report["httpx"] + report["curl"] + chrome}
     ok = "OK" in verdicts
     print(f"\nVEREDICTO: {'ACCESIBLE' if ok else 'BLOQUEADO'}  (verdicts={sorted(verdicts)})")
+    if runs > 1:
+        print(f"ESTABILIDAD (chrome_headed, {runs} corridas):")
+        for url, counts in report["stability"].items():
+            summary = ", ".join(f"{v}={n}" for v, n in sorted(counts.items()))
+            print(f"  {url}  ->  {summary}")
     return 0 if ok else 1
 
 

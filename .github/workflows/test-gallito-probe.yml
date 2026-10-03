@@ -36,8 +36,10 @@ jobs:
           python -m playwright install --with-deps chromium
 
       - name: Probe Gallito (httpx + curl + Chrome headed bajo Xvfb)
+        # --repeat 5 mide si el challenge de Cloudflare se resuelve de forma
+        # consistente o azarosa desde la misma IP del runner.
         run: |
-          xvfb-run -a python scripts/probe_gallito.py | tee probe_gallito.txt
+          xvfb-run -a python scripts/probe_gallito.py --repeat 5 --delay 15 | tee probe_gallito.txt
 
       - name: Publicar evidencia
         if: always()
