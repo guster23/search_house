@@ -31,7 +31,7 @@ Verificado con requests reales el **2026-09-25**:
 |---|---|---|
 | **InfoCasas** | ✅ activa | Página server-rendered con `__NEXT_DATA__`. Sin navegador, sin API key. |
 | **MercadoLibre** | 🚫 descartada | API con 403 para apps personales + web exige login a IPs de datacenter. Ver [HANDOFF.md](HANDOFF.md). |
-| **Gallito** | 🚫 bloqueada | Cloudflare managed challenge (`cf-mitigated: challenge`). |
+| **Gallito** | ✅ activa |  |
 
 Gallito queda declarada en `config.yaml` con `enabled: false` y documentada en
 su módulo. No se intenta evadir bloqueos ni resolver CAPTCHAs.
@@ -76,7 +76,7 @@ turso db show house-watch --url          # → TURSO_DATABASE_URL
 turso db tokens create house-watch       # → TURSO_AUTH_TOKEN
 ```
 
-### 3. Aplicar las migraciones
+### 3. Aplicar las migraciones - OPCIONAL
 
 ```bash
 export TURSO_DATABASE_URL=...
@@ -169,7 +169,7 @@ aparezca algo que cumpla tus criterios.
 
 ---
 
-## Uso local
+## Uso local - NO DAR BOLA
 
 ```bash
 python3.13 -m venv .venv && source .venv/bin/activate
@@ -210,39 +210,6 @@ búsqueda → normalizar → comparar con la base → filtros duros → score
   primeras semanas** y aparece solo cuando hay historia suficiente. Las alertas
   nunca dependen de él.
 
-### Garantías
-
-| Situación | Qué pasa |
-|---|---|
-| GitHub ejecuta el mismo run dos veces | Un solo Telegram. La reserva en la tabla `alerts` con `dedupe_key` único lo impide. |
-| Telegram se cae justo después de reservar | La alerta queda pendiente y se reenvía en la corrida siguiente. No se pierde. |
-| Un portal se cae | Las demás fuentes siguen. Cada una está aislada. |
-| Un scraper se rompe | Tras 3 corridas sin resultados plausibles avisa **una sola vez**, y avisa de nuevo cuando se recupera. |
-| Un scraper devuelve 0 por estar roto | **No** marca todo el historial como inactivo. Las ausencias solo cuentan si la fuente estuvo sana. |
-| Aparecen 40 casas de golpe | Manda como mucho `max_alerts_per_run` y reparte el resto en las corridas siguientes. No descarta ninguna. |
-| Una propiedad baja de precio | Alerta si supera `price_drop_threshold_percent`, una vez por precio nuevo. |
-
----
-
-## Costo
-
-| Servicio | Uso | Costo |
-|---|---|---|
-| Repositorio GitHub | privado | $0 |
-| GitHub Actions | ~744 min/mes de 2.000 gratis | $0 |
-| Turso | despreciable frente a 5 GB / 500M lecturas / 10M escrituras | $0 |
-| Telegram | — | $0 |
-| Servidor, dominio, SSL, frontend, LLM | no existen | $0 |
-| **Total** | | **$0/mes** |
-
-Actions factura por minuto entero redondeando hacia arriba, así que 24 runs
-diarios de ~20 segundos cuestan 24 minutos por día (744/mes), no 8.
-
-Si algún proveedor cambia sus límites, la lógica de negocio no está acoplada a
-ninguno: `ListingRepository`, `ListingSource` y `Notifier` son interfaces, y el
-scheduler puede pasar a `cron`, `launchd` o un runner propio sin tocar el resto.
-
----
 
 ## Estructura
 
@@ -264,19 +231,4 @@ src/house_watch/
 ├── opportunity.py      comparables y mediana
 ├── health.py           detección de scrapers rotos
 └── dedupe.py           cross-posting entre portales
-```
-
-Los tests corren contra la **respuesta real** de InfoCasas capturada en
-`tests/fixtures/`.
-
-## Mantenimiento
-
-No requiere ninguno en condiciones normales. Cuando un portal cambia su
-estructura, el sistema te avisa por Telegram en vez de fallar en silencio.
-
-Para mirar el estado:
-
-```bash
-turso db shell house-watch "SELECT * FROM source_health"
-turso db shell house-watch "SELECT * FROM scrape_runs ORDER BY id DESC LIMIT 10"
 ```
