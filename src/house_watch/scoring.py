@@ -67,7 +67,7 @@ def score_listing(listing: Listing, cfg: Config) -> tuple[int, list[str]]:
             reasons.append(f"terreno {listing.land_area_m2:.0f} m2")
 
     for key, points in (s.get("features") or {}).items():
-        if key in listing.features:
+        if key in listing.features and float(points) > 0:
             score += float(points)
             reasons.append(_FEATURE_LABELS.get(key, key))
 

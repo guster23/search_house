@@ -81,7 +81,6 @@ filters:
     - Cordon
     - Prado
     # Costa Canelones
-    - Solymar
     - Lagomar
     - El Pinar
     - Neptunia
@@ -97,7 +96,7 @@ scoring:
 
   # Rango de precio "ideal" (no el maximo aceptable).
   ideal_price:
-    min: 80000
+    min: 0
     max: 180000
     points: 20
 
@@ -117,7 +116,6 @@ scoring:
       - Cordon
       - Prado
       # Costa Canelones
-      - Solymar
       - Lagomar
       - El Pinar
       - Neptunia
@@ -133,11 +131,11 @@ scoring:
   # Puntos por caracteristica detectada (facilities del portal + texto).
   features:
     garage: 2
-    fondo: 8          # importante para vos
-    parrillero: 3
-    padron_unico: 8   # importante para vos
-    acepta_banco: 8   # importante para vos
-    piscina: 2
+    fondo: 10
+    padron_unico: 2
+    acepta_banco: 2
+    parrillero: 0
+    piscina: 0
 
 # ---------------------------------------------------------------------------
 # Alertas.
