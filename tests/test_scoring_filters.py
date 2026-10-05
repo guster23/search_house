@@ -7,7 +7,7 @@ def make(**kwargs) -> Listing:
     base = dict(
         source="infocasas", external_id="1", canonical_url="https://x/1",
         price_usd=198000, currency="U$S", bedrooms=3, bathrooms=2,
-        built_area_m2=115, land_area_m2=420, neighborhood="Solymar",
+        built_area_m2=115, land_area_m2=420, neighborhood="Lagomar",
         department="Canelones",
     )
     base.update(kwargs)
@@ -21,7 +21,7 @@ def test_score_es_deterministico(cfg):
 
 def test_score_suma_lo_que_dice_la_config(cfg):
     sin_extras = make(features=set(), neighborhood="Nada", land_area_m2=None)
-    con_extras = make(features={"garage"}, neighborhood="Solymar", land_area_m2=420)
+    con_extras = make(features={"garage"}, neighborhood="Lagomar", land_area_m2=420)
     bajo, _ = score_listing(sin_extras, cfg)
     alto, razones = score_listing(con_extras, cfg)
     assert alto > bajo

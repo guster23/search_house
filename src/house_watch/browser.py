@@ -1,20 +1,8 @@
 """Manejo de navegador para portales con Cloudflare / JavaScript (seccion 9).
 
-<<<<<<< Updated upstream
-Abstraccion deliberadamente vacia: hoy ningun scraper activo la necesita, asi
-que el workflow NO instala Playwright ni Chromium y el run es de segundos.
-
-Cuando haga falta (por ejemplo para Gallito, bloqueado por Cloudflare), implementar aca
-con: Chromium headless, bloqueo de imagenes/fuentes/media/analytics, timeout
-agresivo y cierre garantizado de context y browser.
-
-No se intenta resolver CAPTCHAs. Ante un bloqueo se registra source_degraded y
-se sigue con las demas fuentes.
-=======
 Permite ejecutar Chromium (headed bajo Xvfb o headless) con Playwright,
 gestionando reintentos ante intersticiales de Cloudflare y cerrando
 de forma garantizada todos los recursos (contexto, navegador, proceso).
->>>>>>> Stashed changes
 """
 
 from __future__ import annotations
@@ -67,8 +55,6 @@ class BrowserFetcher:
         self._ua = user_agent or DEFAULT_UA
         self._playwright = None
         self._browser = None
-        self._context = None
-        self._page = None
 
     def _determine_headless(self) -> bool:
         if self._headless is not None:
@@ -85,7 +71,7 @@ class BrowserFetcher:
         return False
 
     def _ensure_browser(self):
-        if self._page is not None:
+        if self._browser is not None:
             return
 
         try:
@@ -105,12 +91,6 @@ class BrowserFetcher:
                 headless=headless,
                 args=["--no-sandbox", "--disable-dev-shm-usage"],
             )
-            self._context = self._browser.new_context(
-                user_agent=self._ua,
-                locale="es-UY",
-                viewport={"width": 1280, "height": 800},
-            )
-            self._page = self._context.new_page()
         except Exception as exc:
             self.close()
             raise BrowserUnavailable(f"No se pudo iniciar Chromium: {exc}") from exc
@@ -122,7 +102,11 @@ class BrowserFetcher:
         retries: int = 2,
         timeout_ms: int = 30000,
     ) -> BrowserResponse:
-        """Carga una URL con el navegador, reintentando si salta challenge de Cloudflare."""
+        """Carga una URL con el navegador, reintentando si salta challenge de Cloudflare.
+
+        Usa un contexto nuevo por peticion para evitar que Cloudflare ligue cookies
+        de navegacion secuencial y dispare un challenge en la segunda pagina.
+        """
         if self._budget and self._budget.exhausted:
             raise BrowserFetchError("Presupuesto de ejecucion agotado")
 
@@ -135,15 +119,22 @@ class BrowserFetcher:
             if self._budget and self._budget.exhausted:
                 raise BrowserFetchError("Presupuesto agotado durante los reintentos")
 
+            context = None
             try:
                 log.debug("Navegando %s (intento %d/%d)", url, attempt, retries + 1)
-                resp = self._page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+                context = self._browser.new_context(
+                    user_agent=self._ua,
+                    locale="es-UY",
+                    viewport={"width": 1280, "height": 800},
+                )
+                page = context.new_page()
+                resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
                 # Da tiempo a que el challenge de Cloudflare se resuelva solo
-                self._page.wait_for_timeout(int(wait_seconds * 1000))
+                page.wait_for_timeout(int(wait_seconds * 1000))
 
                 status = resp.status if resp else 0
-                title = self._page.title()
-                html = self._page.content()
+                title = page.title()
+                html = page.content()
 
                 is_challenge = (
                     status == 403
@@ -155,14 +146,14 @@ class BrowserFetcher:
                         status_code=status,
                         text=html,
                         title=title,
-                        url=self._page.url,
+                        url=page.url,
                     )
 
                 last_resp = BrowserResponse(
                     status_code=status,
                     text=html,
                     title=title,
-                    url=self._page.url,
+                    url=page.url,
                 )
 
                 if is_challenge:
@@ -187,24 +178,18 @@ class BrowserFetcher:
                 log.warning("Fallo al navegar %s (intento %d/%d): %s", url, attempt, retries + 1, exc)
                 if attempt <= retries:
                     time.sleep(2.0)
+            finally:
+                if context:
+                    try:
+                        context.close()
+                    except Exception:
+                        pass
 
         if last_resp is not None:
             return last_resp
         raise BrowserFetchError(f"Fallo al cargar {url}: {last_error}")
 
     def close(self):
-        if self._page:
-            try:
-                self._page.close()
-            except Exception:
-                pass
-            self._page = None
-        if self._context:
-            try:
-                self._context.close()
-            except Exception:
-                pass
-            self._context = None
         if self._browser:
             try:
                 self._browser.close()
