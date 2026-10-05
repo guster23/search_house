@@ -1,34 +1,47 @@
-"""Fallback de navegador (seccion 9).
+"""Manejo de navegador para portales con Cloudflare / JavaScript (seccion 9).
 
-Abstraccion deliberadamente vacia: hoy ningun scraper activo la necesita, asi
-que el workflow NO instala Playwright ni Chromium y el run es de segundos.
-
-Cuando haga falta (por ejemplo para Gallito, bloqueado por Cloudflare), implementar aca
-con: Chromium headless, bloqueo de imagenes/fuentes/media/analytics, timeout
-agresivo y cierre garantizado de context y browser.
-
-No se intenta resolver CAPTCHAs. Ante un bloqueo se registra source_degraded y
-se sigue con las demas fuentes.
+Permite ejecutar Chromium (headed bajo Xvfb o headless) con Playwright,
+gestionando reintentos ante intersticiales de Cloudflare y cerrando
+de forma garantizada todos los recursos (contexto, navegador, proceso).
 """
 
 from __future__ import annotations
 
+import logging
+import os
+import sys
+import time
+from dataclasses import dataclass
+
+log = logging.getLogger(__name__)
+
+DEFAULT_UA = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
+
+INTERSTITIAL_TITLES = ("just a moment", "un momento", "attention required")
+
 
 class BrowserUnavailable(RuntimeError):
-    pass
+    """Playwright o Chromium no estan disponibles."""
+
+
+class BrowserFetchError(Exception):
+    """Error al cargar una pagina con el navegador."""
+
+
+@dataclass
+class BrowserResponse:
+    status_code: int
+    text: str
+    title: str = ""
+    url: str = ""
 
 
 class BrowserFetcher:
-    """No se instancia salvo que un scraper declare requires_browser = True."""
+    """Ejecutor de navegacion para scrapers que requieren browser real."""
 
-<<<<<<< Updated upstream
-    def __init__(self, *_args, **_kwargs):
-        raise BrowserUnavailable(
-            "Ningun scraper activo requiere navegador. Instalar Playwright y "
-            "implementar BrowserFetcher antes de habilitar una fuente con "
-            "requires_browser = True."
-        )
-=======
     def __init__(
         self,
         scraping_cfg: dict | None = None,
@@ -42,8 +55,6 @@ class BrowserFetcher:
         self._ua = user_agent or DEFAULT_UA
         self._playwright = None
         self._browser = None
-        self._context = None
-        self._page = None
 
     def _determine_headless(self) -> bool:
         if self._headless is not None:
@@ -198,4 +209,3 @@ class BrowserFetcher:
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
->>>>>>> Stashed changes

@@ -37,10 +37,10 @@ def test_secrets_nunca_se_filtran_en_repr():
 
 
 def test_fuentes_habilitadas_por_defecto(cfg):
-    # InfoCasas activa; Gallito sigue bloqueada.
+    # InfoCasas y Gallito activas.
     names = [s.name for s in cfg.enabled_sources()]
     assert "infocasas" in names
-    assert "gallito" not in names
+    assert "gallito" in names
 
 
 def test_config_faltante_da_error_claro(tmp_path):

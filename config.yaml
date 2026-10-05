@@ -30,13 +30,16 @@ sources:
   # responde 403 para apps personales nuevas y el web exige login a IPs de
   # datacenter (GitHub Actions). Detalles en HANDOFF.md.
 
-  # Gallito sigue bloqueado: Cloudflare managed challenge.
-  # Sin workaround limpio disponible por ahora.
+  # Gallito: habilitable con Playwright (Chrome headed bajo Xvfb).
+  # Supera Cloudflare con navegador real y extrae JSON-LD de las busquedas
+  # sin necesidad de abrir paginas de detalle.
   gallito:
-    enabled: false
+    enabled: true
     searches:
       - name: montevideo
-        url: https://www.gallito.com.uy/inmuebles/casas/venta
+        url: https://www.gallito.com.uy/inmuebles/casas/venta/montevideo
+      - name: canelones
+        url: https://www.gallito.com.uy/inmuebles/casas/venta/canelones
 
 # ---------------------------------------------------------------------------
 # Filtros duros. Si una propiedad no los pasa, no se alerta nunca.
