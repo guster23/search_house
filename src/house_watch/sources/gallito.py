@@ -38,7 +38,10 @@ import logging
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from selectolax.parser import HTMLParser
+try:
+    from selectolax.lexbor import LexborHTMLParser as HTMLParser
+except ImportError:  # pragma: no cover
+    from selectolax.parser import HTMLParser
 
 from ..browser import BrowserFetcher, BrowserUnavailable
 from ..budget import ExecutionBudget
