@@ -1,0 +1,115 @@
+sources:
+  infocasas:
+    enabled: true
+    searches:
+      - name: montevideo
+        url: https://www.infocasas.com.uy/venta/casas/montevideo
+      - name: canelones-ciudad-de-la-costa
+        url: https://www.infocasas.com.uy/venta/casas/canelones/ciudad-de-la-costa
+  gallito:
+    enabled: true
+    searches:
+      - name: montevideo
+        url: https://www.gallito.com.uy/inmuebles/casas/venta/montevideo
+
+filters:
+  currency: USD
+  max_price: 250000
+  min_price: 50000
+  min_bedrooms: 2
+  min_built_area_m2: 60
+  reject_keywords:
+    - nuda propiedad
+    - derechos posesorios
+    - derechos y acciones
+    - ocupada
+    - ocupado
+    - anticresis
+    - en pozo
+    - obra nueva en pozo
+  allowed_departments:
+    - Montevideo
+    - Canelones
+  allowed_neighborhoods:
+    - Buceo
+    - Pocitos
+    - Pocitos Nuevo
+    - Punta Carretas
+    - Parque Rodó
+    - Parque Batlle
+    - Tres Cruces
+    - Palermo
+    - Barrio Sur
+    - Cordon
+    - Prado
+    - Lagomar
+    - Solymar
+    - El Pinar
+
+scoring:
+  base: 50
+  ideal_price:
+    min: 80000
+    max: 200000
+    points: 20
+  preferred_neighborhoods:
+    points: 15
+    names:
+      - Buceo
+      - Pocitos
+      - Pocitos Nuevo
+      - Punta Carretas
+      - Parque Rodó
+      - Parque Batlle
+      - Tres Cruces
+      - Palermo
+      - Barrio Sur
+      - Cordon
+      - Prado
+      - Lagomar
+      - Solymar
+  bedrooms:
+    ideal_min: 2
+    points: 5
+  land_area:
+    min_m2: 150
+    points: 10
+  features:
+    garage: 2
+    fondo: 10
+    padron_unico: 2
+    acepta_banco: 2
+    parrillero: 0
+    piscina: 0
+
+alerts:
+  minimum_alert_score: 0
+  price_drop_threshold_percent: 5
+  max_alerts_per_run: 8
+
+opportunity:
+  enabled: true
+  min_comparables: 15
+  built_area_bucket_m2: 50
+  land_area_bucket_m2: 400
+  significant_discount_percent: 10
+
+scraping:
+  max_search_pages_per_source: 5
+  max_detail_requests_per_run: 20
+  request_timeout_seconds: 10
+  retries: 2
+  jitter_ms: [150, 450]
+
+runtime:
+  deadline_seconds: 100
+
+health:
+  degrade_after_consecutive_failures: 3
+  mark_inactive_after_missed_observations: 4
+
+retention:
+  scrape_runs_days: 90
+  listing_versions_days: 365
+
+weekly_summary: true

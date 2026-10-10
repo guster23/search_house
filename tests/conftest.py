@@ -29,7 +29,7 @@ def gallito_html() -> str:
 
 @pytest.fixture
 def cfg():
-    return load_config(ROOT / "config.yaml", secrets=Secrets())
+    return load_config(FIXTURES / "config.yaml", secrets=Secrets())
 
 
 @pytest.fixture
