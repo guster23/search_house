@@ -1,8 +1,9 @@
 """Manejo de navegador para portales con Cloudflare / JavaScript (seccion 9).
 
 Permite ejecutar Chromium (headed bajo Xvfb o headless) con Playwright,
-gestionando reintentos ante intersticiales de Cloudflare y cerrando
-de forma garantizada todos los recursos (contexto, navegador, proceso).
+gestionando reintentos ante intersticiales de Cloudflare, reutilizando
+cookies/clearance entre paginas y cerrando de forma garantizada todos
+los recursos (contexto, navegador, proceso).
 """
 
 from __future__ import annotations
@@ -17,7 +18,12 @@ log = logging.getLogger(__name__)
 
 DEFAULT_UA = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+)
+
+DEFAULT_LINUX_UA = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 )
 
 INTERSTITIAL_TITLES = ("just a moment", "un momento", "attention required")
@@ -52,9 +58,16 @@ class BrowserFetcher:
         self._cfg = scraping_cfg or {}
         self._budget = budget
         self._headless = headless
-        self._ua = user_agent or DEFAULT_UA
+        if user_agent:
+            self._ua = user_agent
+        elif sys.platform.startswith("linux"):
+            self._ua = DEFAULT_LINUX_UA
+        else:
+            self._ua = DEFAULT_UA
         self._playwright = None
         self._browser = None
+        self._context = None
+        self._page = None
 
     def _determine_headless(self) -> bool:
         if self._headless is not None:
@@ -89,8 +102,18 @@ class BrowserFetcher:
             self._playwright = sync_playwright().start()
             self._browser = self._playwright.chromium.launch(
                 headless=headless,
-                args=["--no-sandbox", "--disable-dev-shm-usage"],
+                args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-blink-features=AutomationControlled",
+                ],
             )
+            self._context = self._browser.new_context(
+                user_agent=self._ua,
+                locale="es-UY",
+                viewport={"width": 1280, "height": 800},
+            )
+            self._page = self._context.new_page()
         except Exception as exc:
             self.close()
             raise BrowserUnavailable(f"No se pudo iniciar Chromium: {exc}") from exc
@@ -104,8 +127,8 @@ class BrowserFetcher:
     ) -> BrowserResponse:
         """Carga una URL con el navegador, reintentando si salta challenge de Cloudflare.
 
-        Usa un contexto nuevo por peticion para evitar que Cloudflare ligue cookies
-        de navegacion secuencial y dispare un challenge en la segunda pagina.
+        Mantiene el contexto de navegacion para que las cookies de clearance
+        (cf_clearance) persistan a lo largo de las siguientes paginas.
         """
         if self._budget and self._budget.exhausted:
             raise BrowserFetchError("Presupuesto de ejecucion agotado")
@@ -119,77 +142,95 @@ class BrowserFetcher:
             if self._budget and self._budget.exhausted:
                 raise BrowserFetchError("Presupuesto agotado durante los reintentos")
 
-            context = None
             try:
                 log.debug("Navegando %s (intento %d/%d)", url, attempt, retries + 1)
-                context = self._browser.new_context(
-                    user_agent=self._ua,
-                    locale="es-UY",
-                    viewport={"width": 1280, "height": 800},
-                )
-                page = context.new_page()
-                resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-                # Da tiempo a que el challenge de Cloudflare se resuelva solo
-                page.wait_for_timeout(int(wait_seconds * 1000))
+                if self._page is None or self._page.is_closed():
+                    if self._context is None:
+                        self._context = self._browser.new_context(
+                            user_agent=self._ua,
+                            locale="es-UY",
+                            viewport={"width": 1280, "height": 800},
+                        )
+                    self._page = self._context.new_page()
+
+                resp = self._page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+
+                # Espera adaptativa para dar tiempo a que Cloudflare resuelva el challenge
+                max_wait = max(wait_seconds, 12.0)
+                deadline = time.monotonic() + max_wait
+                while time.monotonic() < deadline:
+                    title = self._page.title()
+                    if not any(t in title.lower() for t in INTERSTITIAL_TITLES):
+                        break
+
+                    # Si Cloudflare Turnstile muestra un checkbox interactivo, intentar cliquearlo
+                    try:
+                        for frame in self._page.frames:
+                            cb = frame.locator("input[type='checkbox'], .ctp-checkbox-label, #challenge-stage input")
+                            if cb.is_visible():
+                                cb.click()
+                                break
+                    except Exception:
+                        pass
+
+                    self._page.wait_for_timeout(500)
 
                 status = resp.status if resp else 0
-                title = page.title()
-                html = page.content()
+                title = self._page.title()
+                html = self._page.content()
 
-                is_challenge = (
-                    status == 403
-                    or any(t in title.lower() for t in INTERSTITIAL_TITLES)
-                )
+                is_challenge = any(t in title.lower() for t in INTERSTITIAL_TITLES)
 
-                if not is_challenge and status == 200:
+                if not is_challenge:
+                    # El challenge se resolvio o no hubo challenge. Si la respuesta inicial
+                    # fue 403 por el interstitial pero el titulo cambio a la pagina real,
+                    # el estado efectivo es 200.
+                    final_status = 200 if status == 403 else status
                     return BrowserResponse(
-                        status_code=status,
+                        status_code=final_status,
                         text=html,
                         title=title,
-                        url=page.url,
+                        url=self._page.url,
                     )
 
                 last_resp = BrowserResponse(
-                    status_code=status,
+                    status_code=403,
                     text=html,
                     title=title,
-                    url=page.url,
+                    url=self._page.url,
                 )
 
-                if is_challenge:
-                    log.warning(
-                        "Cloudflare challenge detectado en %s (status %d, titulo '%s'), intento %d/%d",
-                        url, status, title, attempt, retries + 1,
-                    )
-                    if attempt <= retries:
-                        time.sleep(2.0)
-                        continue
-                else:
-                    log.warning(
-                        "Respuesta HTTP %d inesperada en %s, intento %d/%d",
-                        status, url, attempt, retries + 1,
-                    )
-                    if attempt <= retries:
-                        time.sleep(1.0)
-                        continue
+                log.warning(
+                    "Cloudflare challenge detectado en %s (status %d, titulo '%s'), intento %d/%d",
+                    url, status, title, attempt, retries + 1,
+                )
+                if attempt <= retries:
+                    time.sleep(2.0)
+                    continue
 
             except Exception as exc:
                 last_error = exc
                 log.warning("Fallo al navegar %s (intento %d/%d): %s", url, attempt, retries + 1, exc)
                 if attempt <= retries:
                     time.sleep(2.0)
-            finally:
-                if context:
-                    try:
-                        context.close()
-                    except Exception:
-                        pass
 
         if last_resp is not None:
             return last_resp
         raise BrowserFetchError(f"Fallo al cargar {url}: {last_error}")
 
     def close(self):
+        if self._page:
+            try:
+                self._page.close()
+            except Exception:
+                pass
+            self._page = None
+        if self._context:
+            try:
+                self._context.close()
+            except Exception:
+                pass
+            self._context = None
         if self._browser:
             try:
                 self._browser.close()

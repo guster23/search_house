@@ -72,30 +72,17 @@ Pendiente manual del usuario (no urgente):
 
 ### Implementacion del scraper (2026-10-03)
 
-<<<<<<< Updated upstream
-- **Gallito**: bloqueada por Cloudflare managed challenge. Revisar cada tanto
-  si abre, o evaluar proxy (mismo costo que para ML).
-- **Proxy residencial compartido** (~$5-15/mes) delante de InfoCasas no hace
-  falta (no esta bloqueada); solo tendria sentido si se reintenta ML/Gallito.
-- **Mas busquedas de InfoCasas** (mas zonas, alquileres): gratis, inmediato,
-  mismo modulo. Es el camino de menor riesgo hoy.
-=======
-Scraper implementado y probado end-to-end:
-- `src/house_watch/browser.py`: `BrowserFetcher` con Playwright Chromium (headed bajo Xvfb o headless configurable), retries de navegación automáticos para resolver Cloudflare managed challenge, y limpieza garantizada de contexto/proceso.
-- `src/house_watch/sources/gallito.py`: `GallitoSource` (`requires_browser = True`, `needs_detail = False`). Extrae el bloque `<script type="application/ld+json">` con `ItemList` de `RealEstateListing`. Mapea ID, precio, moneda, dormitorios (con fallback por regex en título), baños, metros cuadrados construidos, barrio, departamento, geolocalización, fotos, fecha e inmobiliaria. Pagina con `?pag=N`.
-- `tests/test_gallito.py` y `tests/test_browser.py`: 13 nuevos tests unitarios contra fixture real capturado (`tests/fixtures/gallito_search.html`). Test suite: 89 passed.
-- Probado en vivo local: 24 propiedades de Gallito extraídas, normalizadas y persistidas en SQLite en 13.5 segundos con `--source gallito --dry-run`.
-- En `config.yaml`: `gallito` configurada con búsquedas por zona (`montevideo`, `canelones`), lista para habilitar (`enabled: true`) cuando se instale Playwright en CI.
+- **Gallito**: Scraper implementado con Playwright Chromium y JSON-LD.
+  - `src/house_watch/browser.py`: `BrowserFetcher` con Playwright Chromium (headed bajo Xvfb o headless configurable), stealth (`--disable-blink-features=AutomationControlled`), retries de navegación adaptativos para resolver Cloudflare managed challenge, y persistencia de cookies/contexto entre peticiones.
+  - `src/house_watch/sources/gallito.py`: `GallitoSource` (`requires_browser = True`, `needs_detail = False`). Extrae el bloque `<script type="application/ld+json">` con `ItemList` de `RealEstateListing`. Mapea ID, precio, moneda, dormitorios (con fallback por regex en título), baños, metros cuadrados construidos, barrio, departamento, geolocalización, fotos, fecha e inmobiliaria. Pagina con `?pag=N`.
+  - Nota sobre Cloudflare en GitHub Actions: Las IPs de datacenter (Azure) pueden recibir Managed Challenge interactivo de Cloudflare. Si Cloudflare eleva el nivel de bloqueo para IPs de datacenter, las búsquedas de Gallito pueden degradarse.
 
 ## Como seguir
 
-- **Activar Gallito en produccion (GitHub Actions)**:
-  1. En `.github/workflows/watch.yml`, instalar playwright + chromium:
-     `pip install -e '.[turso,browser]' && python -m playwright install --with-deps chromium`
-  2. Ejecutar con `xvfb-run -a house-watch run --config config.yaml`
-  3. En `config.yaml`, poner `gallito.enabled: true`.
-- **Mas busquedas de InfoCasas o Gallito** (mas zonas, casas/apartamentos).
->>>>>>> Stashed changes
+- **Monitorear Gallito en produccion (GitHub Actions)**:
+  - En `.github/workflows/watch.yml` se ejecuta bajo `xvfb-run -a house-watch run --config config.yaml`.
+  - Si Cloudflare bloquea recurrentemente desde CI, considerar desactivar Gallito (`gallito.enabled: false`) o usar proxy residencial si se prioriza Gallito.
+- **Mas busquedas de InfoCasas** (mas zonas, casas/apartamentos): InfoCasas sigue siendo 100% confiable y sin antibot.
 
 ## Comandos utiles
 

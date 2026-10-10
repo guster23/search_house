@@ -238,14 +238,17 @@ class Pipeline:
                 self._alert_for_change(listing, prior)
         stats.alerts_sent = self._alerts_sent - before
 
-        # Solo se cuentan ausencias si la fuente estuvo sana: si no, un fallo
-        # del scraper desactivaria el historial entero (seccion 28).
-        threshold = int(self._cfg.health.get("mark_inactive_after_missed_observations", 4))
-        deactivated = self._repo.mark_missing(
-            source.name, [l.external_id for l in listings], threshold
-        )
-        if deactivated:
-            log.info("%s: %d propiedad(es) marcadas inactivas", source.name, deactivated)
+        # Solo se cuentan ausencias si la fuente estuvo sana y completa: si no, un fallo
+        # del scraper o un corte por presupuesto desactivaria el historial (seccion 28).
+        if not budget.stopped_early and result.ok and not result.error:
+            threshold = int(self._cfg.health.get("mark_inactive_after_missed_observations", 4))
+            deactivated = self._repo.mark_missing(
+                source.name, [l.external_id for l in listings], threshold
+            )
+            if deactivated:
+                log.info("%s: %d propiedad(es) marcadas inactivas", source.name, deactivated)
+        elif budget.stopped_early:
+            log.info("%s: corrida parcial (presupuesto agotado), no se actualizan ausencias", source.name)
 
         stats.status = "partial" if budget.stopped_early else "ok"
         stats.finished_at = utcnow()

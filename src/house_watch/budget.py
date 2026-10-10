@@ -29,7 +29,10 @@ class ExecutionBudget:
 
     @property
     def exhausted(self) -> bool:
-        return self.remaining() <= 0
+        if self.remaining() <= 0:
+            self.stopped_early = True
+            return True
+        return False
 
     def can_afford(self, estimated_seconds: float) -> bool:
         """Alcanza para una operacion que estimamos que tarda tanto."""

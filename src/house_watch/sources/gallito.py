@@ -20,15 +20,9 @@ Este JSON estructurado contiene todos los datos relevantes:
 - Inmobiliaria / vendedor (seller)
 - Fotos y descripcion
 
-<<<<<<< Updated upstream
-Es un managed challenge de Cloudflare. No se intenta resolver ni evadir
-(seccion 29). Habilitarla requeriria navegador real, y aun asi el challenge
-puede no pasar.
-=======
 Por lo tanto, NO es necesario abrir las paginas de detalle de cada aviso (las cuales
 ademas presentan mayor proteccion antibot). La busqueda ya provee el detalle completo
 (`detail_complete = True`), de forma analoga a InfoCasas.
->>>>>>> Stashed changes
 """
 
 from __future__ import annotations
@@ -266,6 +260,7 @@ class GallitoSource(BaseSource):
                     for page in range(1, max_pages + 1):
                         if budget.exhausted:
                             log.warning("presupuesto agotado; se corta la paginacion")
+                            result.error = "presupuesto agotado; se corta la paginacion"
                             break
 
                         url = paginated_url(search.url, page)

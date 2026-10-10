@@ -276,3 +276,35 @@ def test_una_fuente_rota_termina_avisando_una_sola_vez(fake_cfg, repo):
 
     run_pipeline(fake_cfg, repo, FakeSource("fake", base), notifier)
     assert any("volvió a funcionar" in m for m in notifier.sent)
+
+
+def test_corrida_parcial_por_presupuesto_no_desactiva_propiedades(fake_cfg, repo):
+    base = [good_listing(str(i)) for i in range(5)]
+    run_pipeline(fake_cfg, repo, FakeSource("fake", base), RecordingNotifier())
+
+    class BudgetExhaustedSource(BaseSource):
+        name = "fake"
+        requires_browser = False
+
+        def search(self, searches, fetcher, budget, cfg):
+            budget.stopped_early = True
+            return SourceResult(
+                source=self.name,
+                listings=[good_listing("0")],
+                pages_fetched=1,
+                plausible=True,
+                error="presupuesto agotado",
+            )
+
+        def needs_detail(self, listing, known):
+            return False
+
+    partial_source = BudgetExhaustedSource()
+    for _ in range(5):
+        run_pipeline(fake_cfg, repo, partial_source, RecordingNotifier())
+
+    activos = repo._conn.execute(
+        "SELECT COUNT(*) FROM listings WHERE active = 1"
+    ).fetchone()[0]
+    assert activos == 5, "una corrida parcial no debe marcar ausencias ni desactivar propiedades"
+

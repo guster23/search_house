@@ -199,6 +199,7 @@ class InfocasasSource(BaseSource):
             for page in range(1, max_pages + 1):
                 if budget.exhausted:
                     log.warning("presupuesto agotado; se corta la paginacion")
+                    result.error = "presupuesto agotado; se corta la paginacion"
                     break
 
                 url = paginated_url(search.url, page)
