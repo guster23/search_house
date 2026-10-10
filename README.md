@@ -154,6 +154,11 @@ en vez de scrapear algo que no debe.
 Después ajustá `filters`, `scoring` y `alerts` a tu caso. Los valores que vienen
 son un ejemplo, no tus preferencias.
 
+Podés editar la configuración de tres formas:
+1. **Editor Web desde GitHub Actions (recomendado)**: `Actions → Edit Config Web → Run workflow`. Te generará un enlace temporal (incluso te lo envía a Telegram si está configurado) para abrir la interfaz visual en tu navegador o celular, validar y guardar con un clic.
+2. **Editor Web local**: `pip install streamlit && streamlit run scripts/config_editor.py`.
+3. **Directamente en el archivo**: modificando `config.yaml`.
+
 ### 9. Ejecutar a mano
 
 `Actions → House Watch → Run workflow`.

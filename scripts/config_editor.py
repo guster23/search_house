@@ -262,7 +262,7 @@ def _build_searches(text: str) -> list[dict]:
     return searches
 
 
-if st.button("💾 Guardar configuración", type="primary", use_container_width=True):
+if st.button("💾 Guardar y Aplicar Configuración", type="primary", use_container_width=True):
     data = {
         "sources": {
             "infocasas": {
@@ -326,5 +326,9 @@ if st.button("💾 Guardar configuración", type="primary", use_container_width=
     if err:
         st.error(f"❌ Configuración inválida: {err}")
     else:
+        # Señal para el workflow de GitHub Actions si está corriendo en CI
+        signal_file = ROOT / ".config_saved"
+        signal_file.write_text("ok", encoding="utf-8")
         st.success("✅ config.yaml guardado y validado correctamente.")
+        st.info("🚀 Si estás usando GitHub Actions, el runner detectará el cambio y hará commit a GitHub automáticamente. Ya podés cerrar esta pestaña.")
         st.balloons()

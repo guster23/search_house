@@ -1,63 +1,16 @@
-name: Update Config
+name: Edit Config Web
 
 on:
   workflow_dispatch:
-    inputs:
-      max_price:
-        description: "Precio máximo (USD)"
-        required: false
-        type: string
-        default: "150000"
-      min_bedrooms:
-        description: "Dormitorios mínimos"
-        required: false
-        type: string
-        default: "2"
-      min_built_area_m2:
-        description: "M² edificados mínimos"
-        required: false
-        type: string
-        default: "60"
-      minimum_alert_score:
-        description: "Score mínimo para alertar (0 = alerta todo)"
-        required: false
-        type: string
-        default: "0"
-      allowed_departments:
-        description: "Departamentos aceptados (separados por coma)"
-        required: false
-        type: string
-        default: "Montevideo"
-      allowed_neighborhoods:
-        description: "Barrios permitidos (separados por coma; dejar vacío para no modificar)"
-        required: false
-        type: string
-        default: ""
-      enable_infocasas:
-        description: "Habilitar InfoCasas"
-        required: true
-        type: choice
-        options:
-          - "keep"
-          - "true"
-          - "false"
-        default: "keep"
-      enable_gallito:
-        description: "Habilitar Gallito"
-        required: true
-        type: choice
-        options:
-          - "keep"
-          - "true"
-          - "false"
-        default: "keep"
 
 permissions:
   contents: write
 
 jobs:
-  update-config:
+  web-editor:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -70,26 +23,103 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       - name: Instalar dependencias
-        run: pip install --disable-pip-version-check -e '.[dev]'
-
-      - name: Aplicar cambios en config.yaml
         run: |
-          ARGS=""
-          [ -n "${{ inputs.max_price }}" ] && ARGS="$ARGS --max-price ${{ inputs.max_price }}"
-          [ -n "${{ inputs.min_bedrooms }}" ] && ARGS="$ARGS --min-bedrooms ${{ inputs.min_bedrooms }}"
-          [ -n "${{ inputs.min_built_area_m2 }}" ] && ARGS="$ARGS --min-built-area ${{ inputs.min_built_area_m2 }}"
-          [ -n "${{ inputs.minimum_alert_score }}" ] && ARGS="$ARGS --min-score ${{ inputs.minimum_alert_score }}"
-          [ -n "${{ inputs.allowed_departments }}" ] && ARGS="$ARGS --departments '${{ inputs.allowed_departments }}'"
-          [ -n "${{ inputs.allowed_neighborhoods }}" ] && ARGS="$ARGS --neighborhoods '${{ inputs.allowed_neighborhoods }}'"
-          ARGS="$ARGS --enable-infocasas ${{ inputs.enable_infocasas }}"
-          ARGS="$ARGS --enable-gallito ${{ inputs.enable_gallito }}"
+          pip install --disable-pip-version-check -e '.[dev]'
+          pip install streamlit pyyaml
 
-          python scripts/update_config.py $ARGS
+      - name: Levantar editor web y túnel
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          # 1. Descargar cloudflared oficial
+          echo "Descargando cloudflared..."
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
 
-      - name: Verificar tests con la nueva config
+          # 2. Iniciar Streamlit en background
+          echo "Iniciando Streamlit..."
+          python -m streamlit run scripts/config_editor.py --server.port 8501 --server.headless true &
+          STREAMLIT_PID=$!
+
+          # 3. Iniciar túnel de Cloudflare
+          echo "Iniciando túnel de Cloudflare..."
+          ./cloudflared tunnel --url http://127.0.0.1:8501 > tunnel.log 2>&1 &
+          TUNNEL_PID=$!
+
+          # 4. Esperar a que cloudflared genere la URL pública (máx 40s)
+          TUNNEL_URL=""
+          for i in {1..40}; do
+            TUNNEL_URL=$(grep -oE 'https://[a-zA-Z0-9-]+\.trycloudflare\.com' tunnel.log | head -n 1 || true)
+            if [ -n "$TUNNEL_URL" ]; then
+              break
+            fi
+            sleep 1
+          done
+
+          if [ -z "$TUNNEL_URL" ]; then
+            echo "❌ Error: no se pudo obtener la URL de Cloudflare Tunnel."
+            cat tunnel.log
+            kill $STREAMLIT_PID $TUNNEL_PID 2>/dev/null || true
+            exit 1
+          fi
+
+          echo "================================================================="
+          echo "🚀 Editor Web disponible en: $TUNNEL_URL"
+          echo "================================================================="
+
+          # 5. Publicar en GitHub Step Summary
+          echo "## 🏠 House Watch — Editor de Configuración Web" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Hacé clic en el siguiente enlace para abrir el editor visual y modificar tus criterios de búsqueda:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 👉 [$TUNNEL_URL]($TUNNEL_URL)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "*(El enlace estará activo durante 20 minutos o hasta que pulses 'Guardar y Aplicar Configuración')*" >> $GITHUB_STEP_SUMMARY
+
+          # 6. Notificar por Telegram si las credenciales están configuradas
+          if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+            MESSAGE="🛠️ *House Watch*: Editor de configuración web disponible.%0A%0A👉 [Abrir Editor Web]($TUNNEL_URL)%0A%0A_Tenés hasta 20 minutos para guardar tus cambios._"
+            curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+              -d "chat_id=$TELEGRAM_CHAT_ID" \
+              -d "text=$MESSAGE" \
+              -d "parse_mode=Markdown" > /dev/null || true
+          fi
+
+          # 7. Esperar a que el usuario guarde (.config_saved) o timeout (20 min = 1200 seg)
+          rm -f .config_saved
+          MAX_WAIT=1200
+          ELAPSED=0
+          SAVED=0
+          while [ $ELAPSED -lt $MAX_WAIT ]; do
+            if [ -f .config_saved ]; then
+              SAVED=1
+              break
+            fi
+            sleep 5
+            ELAPSED=$((ELAPSED + 5))
+          done
+
+          # Limpiar procesos en background
+          kill $STREAMLIT_PID $TUNNEL_PID 2>/dev/null || true
+
+          if [ $SAVED -eq 0 ]; then
+            echo "⏱️ Tiempo agotado sin guardar cambios. No se realizaron modificaciones en el repositorio."
+            exit 0
+          fi
+
+          rm -f .config_saved
+          echo "SAVED=1" >> $GITHUB_ENV
+
+      - name: Validar configuración con tests
+        if: env.SAVED == '1'
         run: pytest -q
 
       - name: Commit y Push de los cambios
+        if: env.SAVED == '1'
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
@@ -97,6 +127,14 @@ jobs:
             echo "No hubo cambios en config.yaml"
           else
             git add config.yaml
-            git commit -m "chore(config): actualizar criterios de búsqueda vía UI de GitHub Actions"
+            git commit -m "chore(config): actualizar criterios de búsqueda vía Editor Web"
             git push
+            echo "✅ Cambios commiteados y pusheados a main."
+
+            if [ -n "$TELEGRAM_BOT_TOKEN" ] && [ -n "$TELEGRAM_CHAT_ID" ]; then
+              curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+                -d "chat_id=$TELEGRAM_CHAT_ID" \
+                -d "text=✅ *House Watch*: Configuración actualizada y guardada con éxito en GitHub." \
+                -d "parse_mode=Markdown" > /dev/null || true
+            fi
           fi
