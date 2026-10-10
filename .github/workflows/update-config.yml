@@ -1,0 +1,102 @@
+name: Update Config
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_price:
+        description: "Precio máximo (USD)"
+        required: false
+        type: string
+        default: "150000"
+      min_bedrooms:
+        description: "Dormitorios mínimos"
+        required: false
+        type: string
+        default: "2"
+      min_built_area_m2:
+        description: "M² edificados mínimos"
+        required: false
+        type: string
+        default: "60"
+      minimum_alert_score:
+        description: "Score mínimo para alertar (0 = alerta todo)"
+        required: false
+        type: string
+        default: "0"
+      allowed_departments:
+        description: "Departamentos aceptados (separados por coma)"
+        required: false
+        type: string
+        default: "Montevideo"
+      allowed_neighborhoods:
+        description: "Barrios permitidos (separados por coma; dejar vacío para no modificar)"
+        required: false
+        type: string
+        default: ""
+      enable_infocasas:
+        description: "Habilitar InfoCasas"
+        required: true
+        type: choice
+        options:
+          - "keep"
+          - "true"
+          - "false"
+        default: "keep"
+      enable_gallito:
+        description: "Habilitar Gallito"
+        required: true
+        type: choice
+        options:
+          - "keep"
+          - "true"
+          - "false"
+        default: "keep"
+
+permissions:
+  contents: write
+
+jobs:
+  update-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Instalar dependencias
+        run: pip install --disable-pip-version-check -e '.[dev]'
+
+      - name: Aplicar cambios en config.yaml
+        run: |
+          ARGS=""
+          [ -n "${{ inputs.max_price }}" ] && ARGS="$ARGS --max-price ${{ inputs.max_price }}"
+          [ -n "${{ inputs.min_bedrooms }}" ] && ARGS="$ARGS --min-bedrooms ${{ inputs.min_bedrooms }}"
+          [ -n "${{ inputs.min_built_area_m2 }}" ] && ARGS="$ARGS --min-built-area ${{ inputs.min_built_area_m2 }}"
+          [ -n "${{ inputs.minimum_alert_score }}" ] && ARGS="$ARGS --min-score ${{ inputs.minimum_alert_score }}"
+          [ -n "${{ inputs.allowed_departments }}" ] && ARGS="$ARGS --departments '${{ inputs.allowed_departments }}'"
+          [ -n "${{ inputs.allowed_neighborhoods }}" ] && ARGS="$ARGS --neighborhoods '${{ inputs.allowed_neighborhoods }}'"
+          ARGS="$ARGS --enable-infocasas ${{ inputs.enable_infocasas }}"
+          ARGS="$ARGS --enable-gallito ${{ inputs.enable_gallito }}"
+
+          python scripts/update_config.py $ARGS
+
+      - name: Verificar tests con la nueva config
+        run: pytest -q
+
+      - name: Commit y Push de los cambios
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet config.yaml; then
+            echo "No hubo cambios en config.yaml"
+          else
+            git add config.yaml
+            git commit -m "chore(config): actualizar criterios de búsqueda vía UI de GitHub Actions"
+            git push
+          fi
